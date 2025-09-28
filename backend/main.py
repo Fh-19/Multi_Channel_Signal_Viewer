@@ -1,19 +1,12 @@
-"""
-main.py
---------
-FastAPI backend entry point.
-"""
-
+# backend/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Initialize app
 app = FastAPI()
 
-# ------------------------
-# CORS configuration
-# ------------------------
-origins = ["http://localhost:5173"]  # Vite frontend
+origins = [
+    "http://localhost:5173",  # Vite frontend
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,13 +16,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ------------------------
-# Import routers (relative import)
-# ------------------------
-from .routers import ecg
+# include routers
+from .routers import ecg, eeg  # assuming both routers exist
 app.include_router(ecg.router, prefix="/api/ecg")
+app.include_router(eeg.router, prefix="/api/eeg")
 
-# Root endpoint
 @app.get("/")
 def root():
     return {"message": "Signal Viewer Backend - Ready"}
