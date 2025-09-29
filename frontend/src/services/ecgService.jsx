@@ -5,21 +5,18 @@
 // - getChannelData
 // - getPlots
 // frontend/services/ecgService.jsx
-// frontend/services/ecgService.jsx
+
 import axios from "axios";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api";
 
-export const fetchEcgCycles = async (recordNumber, leads) => {
-  try {
-    const params = new URLSearchParams();
-    params.append("record_number", recordNumber);
-    leads.forEach(lead => params.append("leads", lead));
+export async function fetchEcgData(recordNumber, leads) {
+  const leadParams = leads.map((l) => `leads=${l}`).join("&");
+  const url = `${API_BASE_URL}/ecg/ecg?record_number=${recordNumber}&${leadParams}`;
 
-    const response = await axios.get(`${API_BASE_URL}/ecg`, { params });
-    return response.data;
-  } catch (error) {
-    console.error("Error fetching ECG cycles:", error);
-    throw error;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ECG data: ${res.status}`);
   }
-};
+  return await res.json();
+}
