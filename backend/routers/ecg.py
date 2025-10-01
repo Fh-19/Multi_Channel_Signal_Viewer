@@ -10,8 +10,8 @@ from ..services import ecg_processing as dsp
 
 FS = 300  # sampling rate of model
 MAXLEN = 30 * FS
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "../pretrained_models/ResNet_30s_34lay_16conv.hdf5")
-CLASSES = ['Atrial Fibrillation', 'Normal Sinus Rythm', 'Other Cardiac Rythms', 'noise']
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "../pretrained_models/ResNet_finetuned_binary2.h5")
+CLASSES = ['Normal ECG', 'Abnormal ECG']
 
 router = APIRouter()
 model = load_model(MODEL_PATH, compile=False)
@@ -71,31 +71,57 @@ async def stream_ecg(websocket: WebSocket, record_number: str):
         await websocket.close()
 
 
+
 # --- ECG classification endpoint ---
 @router.post("/classify")
 def classify_record(req: ClassifyRequest):
     file_path = os.path.join(UPLOAD_FOLDER, req.record_number)
-    signals, _ = dsp.load_ecg_record_from_path(file_path)
-    data = signals[:, 0]  # lead I, filtered
+
+    # Load using wfdb to get fs and signals
+    rec = wfdb.rdrecord(file_path)
+    signals = rec.p_signal
+    fs = rec.fs
+
+    # Resample to 300 Hz if needed
+    if fs != FS:
+        n = signals.shape[0]
+        new_len = int(round(n * FS / fs))
+        from scipy.signal import resample
+        signals = resample(signals, new_len, axis=0)
+        fs = FS
+
+    # Use Lead I (first channel)
+    data = signals[:, 0]
     data = np.nan_to_num(data)
-    data = data[:MAXLEN]
-    data = (data - np.mean(data)) / np.std(data)
 
-    X = np.zeros((1, MAXLEN, 1))
-    X[0, :len(data), 0] = data
+    # Pad or truncate to 30s
+    if len(data) > MAXLEN:
+        data = data[:MAXLEN]
+    elif len(data) < MAXLEN:
+        pad = np.zeros(MAXLEN - len(data))
+        data = np.concatenate([data, pad])
 
+    # Normalize
+    data = (data - np.mean(data)) / (np.std(data) + 1e-8)
+
+    # Reshape for model
+    X = data.reshape(1, MAXLEN, 1).astype(np.float32)
+
+    # Predict
     prob = model.predict(X)
     label_idx = int(np.argmax(prob))
     label = CLASSES[label_idx]
     confidence = float(prob[0, label_idx])
 
+    # Simple abnormal segment markers (optional)
     abnormal_segments = []
-    if label != 'Normal Sinus Rythm':
-        segment_len = FS  # 1-second segments
-        for i in range(0, len(data), segment_len):
-            abnormal_segments.append([i / FS, min(i + segment_len, len(data)) / FS])
+    if label == 'Abnormal ECG':
+        segment_len = FS  # 1 second
+        for i in range(0, MAXLEN, segment_len):
+            abnormal_segments.append([i / FS, min(i + segment_len, MAXLEN) / FS])
 
     return {"label": label, "confidence": confidence, "abnormal_segments": abnormal_segments}
+
 
 
 # --- ECG file upload endpoint ---
