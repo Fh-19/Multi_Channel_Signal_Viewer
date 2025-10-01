@@ -1,22 +1,31 @@
-// eegService.jsx
+// frontend/src/services/eegService.jsx
 import axios from "axios";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api/eeg";
 
-export const uploadEegFile = async (file) => {
+export async function uploadEegFile(file) {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await axios.post(`${API_BASE_URL}/upload`, formData, {
+
+  const res = await axios.post(`${API_BASE_URL}/upload`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
-  return response.data;
-};
+  return res.data;
+}
 
-export const fetchEegSegments = async (filename, channels) => {
-  const params = new URLSearchParams();
-  params.append("filename", filename);
-  channels.forEach((ch) => params.append("channels", ch));
+export async function fetchEegSegments(filename, channels) {
+  const res = await axios.get(`${API_BASE_URL}/segments`, {
+    params: { filename, channels }, // axios encodes array -> ?channels=a&channels=b
+  });
+  return res.data;
+}
 
-  const response = await axios.get(`${API_BASE_URL}/segments`, { params });
-  return response.data;
-};
+export async function predictEegFile(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await axios.post(`${API_BASE_URL}/predict`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data;
+}
