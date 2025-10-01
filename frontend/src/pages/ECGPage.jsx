@@ -1,44 +1,54 @@
 // frontend/src/pages/ECGPage.jsx
 import React, { useState, useEffect, useRef } from "react";
 import Plot from "react-plotly.js";
-import { fetchEcgData } from "../services/ecgService.jsx"; // your service
+import { fetchEcgData, classifyEcgRecord } from "../services/ecgService.jsx";
 
-const ECG_LEAD_NAMES = [
+const DEFAULT_LEAD_NAMES = [
   "I", "II", "III", "aVR", "aVL", "aVF",
   "V1", "V2", "V3", "V4", "V5", "V6"
 ];
 
 export default function ECGPage() {
-  // user controls
-  const [recordNumber, setRecordNumber] = useState("98");
-  const [leads, setLeads] = useState([0, 1, 2]); // original-lead indices
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0); // 1x default
-  const [loop, setLoop] = useState(true);
-  const [mode, setMode] = useState(1); // 1 = cycle streaming, 2 = continuous scrolling
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  // backend data
-  const [signals, setSignals] = useState([]); // full record (N x L) where L === leads.length
+  const [leads, setLeads] = useState([0, 1, 2]);
+  const [signals, setSignals] = useState([]);
   const [fs, setFs] = useState(500);
-  const [rawRPeaks, setRawRPeaks] = useState({}); // from backend: { originalLeadIdx: [sampleIndices] }
-
-  // streaming state
-  const [displaySignals, setDisplaySignals] = useState([]); // buffer shown on plot (array of samples)
-  const [displayStart, setDisplayStart] = useState(0); // sample index in original record that corresponds to displaySignals[0]
-
-  // refs to keep counters without stale closures
+  const [leadNames, setLeadNames] = useState(DEFAULT_LEAD_NAMES);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [uploadedFilename, setUploadedFilename] = useState("");
+  const [rPeaks, setRPeaks] = useState({});
+  const [mode, setMode] = useState(2); // 1 = cycle-by-cycle, 2 = continuous
+  const [isPlaying, setIsPlaying] = useState(false);
   const timerRef = useRef(null);
+  const [displaySignals, setDisplaySignals] = useState([]);
+  const [displayStart, setDisplayStart] = useState(0);
   const cycleIdxRef = useRef(0);
-  const withinCycleIdxRef = useRef(0);
-  const continuousIdxRef = useRef(0);
-  const signalsRef = useRef(signals);
-  const rPeaksRef = useRef(rawRPeaks);
 
-  // update refs whenever data changes
-  useEffect(() => { signalsRef.current = signals; }, [signals]);
-  useEffect(() => { rPeaksRef.current = rawRPeaks; }, [rawRPeaks]);
+  // --- File Upload ---
+  const handleFileChange = (e) => {
+    setUploadedFiles(Array.from(e.target.files));
+  };
 
-  // Helper: convert backend r_peaks keys to numeric keys
+  const handleUpload = async () => {
+    if (uploadedFiles.length !== 2) {
+      alert("Please select both .dat and .hea files.");
+      return;
+    }
+    const formData = new FormData();
+    uploadedFiles.forEach((file) => formData.append("files", file));
+    const res = await fetch("http://127.0.0.1:8000/api/ecg/upload", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json();
+    if (data.filename) {
+      setUploadedFilename(data.filename);
+      alert("Files uploaded!");
+    } else {
+      alert(data.message || "Upload failed.");
+    }
+  };
+
+  // --- Normalize R-peaks keys ---
   const normalizeRPeaks = (rp) => {
     if (!rp) return {};
     const out = {};
@@ -49,242 +59,250 @@ export default function ECGPage() {
     return out;
   };
 
-  // Load data from backend
-  async function handleLoad() {
-    setIsPlaying(false);
-    clearTimeout(timerRef.current);
+  // --- Load ECG from backend ---
+  const handleLoad = async () => {
     try {
-      const data = await fetchEcgData(recordNumber, leads);
+      if (!uploadedFilename) {
+        alert("Please upload an ECG file first.");
+        return;
+      }
+      const data = await fetchEcgData(uploadedFilename, leads);
       setSignals(data.signals || []);
       setFs(data.fs || 500);
-      setRawRPeaks(normalizeRPeaks(data.r_peaks || {}));
-      cycleIdxRef.current = 0;
-      withinCycleIdxRef.current = 0;
-      continuousIdxRef.current = 0;
-      setDisplaySignals([]);
+      setLeadNames(data.lead_names || DEFAULT_LEAD_NAMES);
+      setRPeaks(normalizeRPeaks(data.r_peaks || {}));
       setDisplayStart(0);
-      setIsPlaying(true);
+      cycleIdxRef.current = 0;
+
+      if (mode === 1) {
+        setDisplaySignals(getCycleSignals(data.signals || [], data.r_peaks || {}, leads, 0));
+      } else {
+        setDisplaySignals(getContinuousSignals(data.signals || [], 0, 1000));
+      }
+      setIsPlaying(false);
     } catch (err) {
       console.error("Failed to load ECG:", err);
       alert("Failed to load ECG: " + (err.message || err));
     }
+  };
+
+  // --- Get signals for current cycle (mode 1) ---
+  function getCycleSignals(signals, rPeaks, leads, cycleIdx) {
+    const rp = normalizeRPeaks(rPeaks);
+    const lead0Peaks = rp[leads[0]] || [];
+    if (lead0Peaks.length < 2 || cycleIdx >= lead0Peaks.length - 1) return [];
+    const start = lead0Peaks[cycleIdx];
+    const end = lead0Peaks[cycleIdx + 1];
+    return signals.slice(start, end);
   }
 
-  // Toggle lead selection (max 3)
-  const toggleLead = (idx) => {
-    setIsPlaying(false);
-    clearTimeout(timerRef.current);
-    setLeads(prev => {
-      if (prev.includes(idx)) return prev.filter(l => l !== idx);
-      if (prev.length >= 3) return prev;
-      return [...prev, idx];
-    });
-  };
+  // --- Get signals for continuous mode (mode 2) ---
+  function getContinuousSignals(signals, start, windowSize) {
+    return signals.slice(start, start + windowSize);
+  }
 
-  // Stop helper
-  const stopStreaming = () => {
-    clearTimeout(timerRef.current);
-    timerRef.current = null;
-    setIsPlaying(false);
-  };
-
-  // Play/pause toggle
+  // --- Play/Pause/Stop ---
   const handlePlayPause = () => {
     if (isPlaying) {
       stopStreaming();
     } else {
-      if (!signals || signals.length === 0) {
+      if (!signals.length) {
         alert("Load a record first");
         return;
       }
       setIsPlaying(true);
+      if (mode === 1) playCycle();
+      else playContinuous();
     }
   };
 
-  // Clean up on unmount
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  const stopStreaming = () => {
+    clearTimeout(timerRef.current);
+    setIsPlaying(false);
+  };
 
-  // === Mode 1: Cycle-by-cycle streaming ===
+  // --- Cycle-by-cycle streaming ---
+  function playCycle() {
+    const rp = normalizeRPeaks(rPeaks);
+    const lead0Peaks = rp[leads[0]] || [];
+    if (cycleIdxRef.current >= lead0Peaks.length - 1) {
+      setIsPlaying(false);
+      return;
+    }
+    setDisplaySignals(getCycleSignals(signals, rPeaks, leads, cycleIdxRef.current));
+    timerRef.current = setTimeout(() => {
+      cycleIdxRef.current += 1;
+      playCycle();
+    }, 1000);
+  }
+
+  // --- Continuous streaming (FIXED) ---
+  function playContinuous() {
+    const windowSize = 1000;
+    const step = 50; // advance 50 samples (~0.1s at 500Hz) per frame
+
+    setDisplayStart(prev => {
+      const newStart = prev + step;
+      if (newStart + windowSize >= signals.length) {
+        setIsPlaying(false);
+        return prev;
+      }
+      setDisplaySignals(getContinuousSignals(signals, newStart, windowSize));
+      return newStart;
+    });
+
+    timerRef.current = setTimeout(playContinuous, 50); // update ~20 FPS
+  }
+
+  // --- Mode switch ---
   useEffect(() => {
-    if (!isPlaying || mode !== 1) return;
-    if (!signalsRef.current.length) return;
+    if (!signals.length) return;
+    if (mode === 1) {
+      cycleIdxRef.current = 0;
+      setDisplaySignals(getCycleSignals(signals, rPeaks, leads, 0));
+    } else {
+      setDisplayStart(0);
+      setDisplaySignals(getContinuousSignals(signals, 0, 1000));
+    }
+    stopStreaming();
+    // eslint-disable-next-line
+  }, [mode, signals, rPeaks, leads]);
 
-    const refLead = leads.length > 0 ? leads[0] : 0;
-    const peaksForRef = rPeaksRef.current[refLead] || [];
-    if (!peaksForRef || peaksForRef.length < 2) return;
-
-    const peaks = peaksForRef.slice().map(Number).sort((a,b)=>a-b);
-    let cancelled = false;
-    cycleIdxRef.current = 0;
-    withinCycleIdxRef.current = 0;
-    const msPerSample = (1000.0 / fs) / Math.max(0.01, playbackSpeed);
-
-    const step = () => {
-      if (cancelled || !isPlaying) return;
-
-      const cIdx = cycleIdxRef.current;
-      const start = peaks[cIdx];
-      const end = peaks[cIdx + 1];
-      const cycleLen = end - start;
-      if (cycleLen <= 0) {
-        cycleIdxRef.current = (cycleIdxRef.current + 1) % (peaks.length - 1);
-        withinCycleIdxRef.current = 0;
-        timerRef.current = setTimeout(step, msPerSample);
-        return;
-      }
-
-      const sIdx = withinCycleIdxRef.current;
-      const globalIdx = start + sIdx;
-      if (!signalsRef.current[globalIdx]) {
-        cycleIdxRef.current = (cycleIdxRef.current + 1) % (peaks.length - 1);
-        withinCycleIdxRef.current = 0;
-        setDisplaySignals([]);
-        setDisplayStart(peaks[cycleIdxRef.current]);
-        timerRef.current = setTimeout(step, msPerSample);
-        return;
-      }
-
-      if (sIdx === 0) {
-        setDisplaySignals([]);
-        setDisplayStart(start);
-      }
-
-      const sampleRow = signalsRef.current[globalIdx];
-      setDisplaySignals(prev => prev.concat([sampleRow]));
-      withinCycleIdxRef.current += 1;
-
-      if (withinCycleIdxRef.current >= cycleLen) {
-        withinCycleIdxRef.current = 0;
-        cycleIdxRef.current = (cycleIdxRef.current + 1) % (peaks.length - 1);
-        timerRef.current = setTimeout(() => {
-          setDisplaySignals([]);
-          timerRef.current = setTimeout(step, msPerSample);
-        }, 0);
+  // --- Toggle lead ---
+  const toggleLead = (idx) => {
+    setLeads((prev) => {
+      if (prev.includes(idx)) {
+        return prev.filter((l) => l !== idx);
+      } else if (prev.length < 3) {
+        return [...prev, idx];
       } else {
-        timerRef.current = setTimeout(step, msPerSample);
+        alert("You can select up to 3 leads only.");
+        return prev;
       }
-    };
-
-    timerRef.current = setTimeout(step, 0);
-    return () => { cancelled = true; if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [isPlaying, mode, fs, playbackSpeed, leads]);
-
-  // === Mode 2: Continuous scrolling (1.5s window) ===
-  useEffect(() => {
-    if (!isPlaying || mode !== 2) return;
-    if (!signalsRef.current.length) return;
-
-    let cancelled = false;
-    continuousIdxRef.current = 0;
-    const bufferMaxSamples = fs * 10; // keep 10s internally
-    const displayWindowSamples = Math.round(fs * 1.5); // show 1.5s at a time
-    const tickInterval = 100;
-    const samplesPerTick = Math.max(1, Math.round((fs * playbackSpeed * tickInterval) / 1000));
-
-    const step = () => {
-      if (cancelled || !isPlaying) return;
-      const startIdx = continuousIdxRef.current;
-      let endIdx = startIdx + samplesPerTick;
-      if (endIdx > signalsRef.current.length) endIdx = signalsRef.current.length;
-
-      const chunk = signalsRef.current.slice(startIdx, endIdx);
-      setDisplaySignals(prev => {
-        let next = prev.concat(chunk);
-        if (next.length > bufferMaxSamples) next = next.slice(next.length - bufferMaxSamples);
-        const windowStart = Math.max(0, next.length - displayWindowSamples);
-        setDisplayStart(continuousIdxRef.current - (next.length - windowStart));
-        return next.slice(windowStart);
-      });
-
-      continuousIdxRef.current = endIdx;
-      if (continuousIdxRef.current >= signalsRef.current.length) {
-        if (loop) { continuousIdxRef.current = 0; setDisplaySignals([]); setDisplayStart(0); }
-        else { setIsPlaying(false); return; }
-      }
-
-      timerRef.current = setTimeout(step, tickInterval);
-    };
-
-    timerRef.current = setTimeout(step, 0);
-    return () => { cancelled = true; if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [isPlaying, mode, fs, playbackSpeed, loop, leads]);
-
-  // --- Plot preparation ---
-  const xAxis = displaySignals.map((_, i) => mode === 1 ? i/fs : (displayStart + i)/fs);
-  const rPeaksNumeric = normalizeRPeaks(rawRPeaks);
-
-  const peaksForLeadInView = (originalLeadIdx) => {
-    const allPeaks = rPeaksNumeric[originalLeadIdx] || [];
-    if (!allPeaks.length) return { xs: [], ys: [] };
-    const colIdx = leads.indexOf(originalLeadIdx);
-    if (colIdx === -1) return { xs: [], ys: [] };
-    const xs = [], ys = [];
-    for (const p of allPeaks) {
-      const pNum = Number(p);
-      if (pNum >= displayStart && pNum < displayStart + displaySignals.length) {
-        const relIdx = pNum - displayStart;
-        const row = displaySignals[relIdx];
-        const y = row ? row[colIdx] : null;
-        if (y !== null) { xs.push(mode === 1 ? relIdx/fs : (displayStart + relIdx)/fs); ys.push(y); }
-      }
-    }
-    return { xs, ys };
+    });
   };
 
-  // --- Build merged traces ---
-  const leadOffset = 0.0;
+  // --- Build traces for plotting ---
+  const xAxis = displaySignals.map((_, i) =>
+    mode === 1 ? i / fs : (displayStart + i) / fs
+  );
+  const rPeaksNormalized = normalizeRPeaks(rPeaks);
+
   const allTraces = [];
-  leads.forEach((origLeadIdx, i) => {
-    const y = displaySignals.map(row => row ? row[i] + i*leadOffset : null);
-    allTraces.push({ x: xAxis, y, type: "scatter", mode: "lines", name: ECG_LEAD_NAMES[origLeadIdx], line: { width: 1.5 } });
-    const peakData = peaksForLeadInView(origLeadIdx);
-    const yPeaks = peakData.ys.map(v => v + i*leadOffset);
-    allTraces.push({ x: peakData.xs, y: yPeaks, type: "scatter", mode: "markers+text", name: `R-peaks ${ECG_LEAD_NAMES[origLeadIdx]}`, marker: { color: "red", size: 8, symbol: "circle" }, text: peakData.xs.map(() => "R"), textposition: "top center" });
+  leads.forEach((leadIdx, i) => {
+    const y = displaySignals.map(row => row ? row[i] : null);
+    allTraces.push({
+      x: xAxis,
+      y: y,
+      type: "scatter",
+      mode: "lines",
+      name: leadNames[leadIdx] || `Lead ${leadIdx + 1}`,
+      line: { width: 1.2 },
+    });
+
+    // R-peaks overlay only in mode 2 (continuous)
+    if (mode === 2) {
+      const peaks = rPeaksNormalized[leadIdx] || [];
+      const xs = [], ys = [];
+      for (const p of peaks) {
+        if (p >= displayStart && p < displayStart + displaySignals.length) {
+          const relIdx = p - displayStart;
+          const row = displaySignals[relIdx];
+          const yVal = row ? row[i] : null;
+          if (yVal !== null) {
+            xs.push((displayStart + relIdx) / fs);
+            ys.push(yVal);
+          }
+        }
+      }
+      allTraces.push({
+        x: xs,
+        y: ys,
+        type: "scatter",
+        mode: "markers+text",
+        name: `R-peaks ${leadNames[leadIdx]}`,
+        marker: { color: "red", size: 7, symbol: "circle" },
+        text: xs.map(() => "R"),
+        textposition: "top center",
+      });
+    }
   });
+
+  // --- Classification ---
+  const classifyRecord = async () => {
+    try {
+      if (!uploadedFilename) {
+        alert("Please upload an ECG file first.");
+        return;
+      }
+      const result = await classifyEcgRecord(uploadedFilename, "");
+      const { label, confidence } = result;
+      alert(`Predicted: ${label} (${(confidence * 100).toFixed(1)}%)`);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   return (
     <div style={{ padding: "20px" }}>
       <h2>ECG Viewer</h2>
-
       <div style={{ marginBottom: "10px" }}>
-        <label>
-          Record number:{" "}
-          <input type="text" value={recordNumber} onChange={e => setRecordNumber(e.target.value)} style={{ width: "60px" }} />
-        </label>
-        <button onClick={handleLoad} style={{ marginLeft: "10px" }}>Load</button>
-        <button onClick={handlePlayPause} style={{ marginLeft: "10px" }}>{isPlaying ? "Pause" : "Play"}</button>
-        <button onClick={stopStreaming} style={{ marginLeft: "10px" }}>Stop</button>
+        <button onClick={handleLoad}>Load</button>
+        <button onClick={handlePlayPause} style={{ marginLeft: "10px" }}>
+          {isPlaying ? "Pause" : "Play"}
+        </button>
+        <button onClick={stopStreaming} style={{ marginLeft: "10px" }}>
+          Stop
+        </button>
+        <button onClick={classifyRecord} style={{ marginLeft: "10px" }}>
+          Analyze
+        </button>
       </div>
-
       <div style={{ marginBottom: "10px" }}>
-        <button onClick={() => setMode(1)} style={{ fontWeight: mode===1?"bold":"normal" }}>Mode 1 (Cycle-by-cycle)</button>
-        <button onClick={() => setMode(2)} style={{ marginLeft:"10px", fontWeight: mode===2?"bold":"normal" }}>Mode 2 (Continuous)</button>
+        <button onClick={() => setMode(1)} style={{ fontWeight: mode === 1 ? "bold" : "normal" }}>
+          Mode 1 (Cycle-by-cycle)
+        </button>
+        <button onClick={() => setMode(2)} style={{ marginLeft: "10px", fontWeight: mode === 2 ? "bold" : "normal" }}>
+          Mode 2 (Continuous)
+        </button>
       </div>
-
       <div style={{ marginBottom: "10px" }}>
-        <label>Speed: <input type="number" step="0.1" value={playbackSpeed} onChange={e=>setPlaybackSpeed(Number(e.target.value)||1)} style={{ width:"60px" }} /> x</label>
-        <label style={{ marginLeft:"20px" }}>
-          <input type="checkbox" checked={loop} onChange={e=>setLoop(e.target.checked)} /> Loop playback
-        </label>
-      </div>
-
-      <div style={{ marginBottom: "10px" }}>
-        {Array.from({length:12}, (_,i)=>(
-          <label key={i} style={{ marginRight:"10px" }}>
-            <input type="checkbox" checked={leads.includes(i)} onChange={()=>toggleLead(i)} /> {ECG_LEAD_NAMES[i]}
+        {leadNames.map((name, i) => (
+          <label key={i} style={{ marginRight: "10px" }}>
+            <input
+              type="checkbox"
+              checked={leads.includes(i)}
+              onChange={() => toggleLead(i)}
+            />{" "}
+            {name}
           </label>
         ))}
       </div>
-
+      <div style={{ marginBottom: "10px" }}>
+        <input
+          type="file"
+          multiple
+          accept=".dat,.hea"
+          onChange={handleFileChange}
+        />
+        <button onClick={handleUpload} style={{ marginLeft: "10px" }}>
+          Upload ECG Files
+        </button>
+        {uploadedFilename && (
+          <div style={{ marginTop: "10px" }}>
+            Uploaded file: {uploadedFilename}
+          </div>
+        )}
+      </div>
       <Plot
         data={allTraces}
         layout={{
           width: 900,
           height: 400,
           margin: { l: 50, r: 20, t: 40, b: 40 },
-          title: `ECG (${mode === 1 ? "Cycle" : "Continuous"})`,
+          title: `ECG Viewer (${mode === 1 ? "Cycle-by-cycle" : "Continuous"})`,
           xaxis: { title: "Time (s)" },
-          yaxis: { title: "Amplitude + offset (mV)", autorange: true },
+          yaxis: { title: "Amplitude (mV)", autorange: true },
           showlegend: true,
         }}
         config={{ displayModeBar: false }}

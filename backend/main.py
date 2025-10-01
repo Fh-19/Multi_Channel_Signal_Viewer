@@ -17,9 +17,10 @@ app.add_middleware(
 )
 
 # include routers
-from .routers import ecg, eeg  # assuming both routers exist
+from .routers import ecg, eeg
 app.include_router(ecg.router, prefix="/api/ecg")
 app.include_router(eeg.router, prefix="/api/eeg")
+
 
 @app.get("/")
 def root():

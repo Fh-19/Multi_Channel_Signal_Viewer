@@ -1,28 +1,42 @@
 import os
 import wfdb
 import numpy as np
-from scipy.signal import find_peaks
-
-# LUDB data path
-LUDB_FOLDER = os.path.join(os.path.dirname(__file__), "data")
+from scipy.signal import find_peaks, butter, filtfilt, iirnotch
 
 # -----------------------
 # DSP / ECG Processing
 # -----------------------
-def load_ecg_record(record_number: str):
-    """
-    Load ECG record from LUDB folder by record_number (e.g., "98").
-    """
-    record_path = os.path.join(LUDB_FOLDER, f"{record_number}")
-    if not os.path.exists(record_path + ".iii"):  # check one lead file exists
-        raise FileNotFoundError(f"Record {record_number} not found in {LUDB_FOLDER}")
-    record = wfdb.rdrecord(record_path)
-    signals = record.p_signal  # shape (num_samples, 12)
+
+def bandpass_filter(signal, fs, lowcut=0.5, highcut=30.0, order=2):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype="band")
+    return filtfilt(b, a, signal)
+
+def notch_filter(signal, fs, freq=50.0, quality=30):
+    nyq = 0.5 * fs
+    w0 = freq / nyq
+    b, a = iirnotch(w0, quality)
+    return filtfilt(b, a, signal)
+
+def load_ecg_record_from_path(file_path: str):
+    # WFDB reads by base name (no extension)
+    base, _ = os.path.splitext(file_path)
+    record = wfdb.rdrecord(base)
+
+    signals = record.p_signal
     fs = record.fs
-    return signals, fs
+    leads = record.sig_name  # list of lead names, e.g. ["I", "II", "III", ..., "V6"]
 
+    filtered_signals = np.zeros_like(signals)
+    for i in range(signals.shape[1]):
+        sig = signals[:, i]
+        sig = bandpass_filter(sig, fs)
+        sig = notch_filter(sig, fs, freq=50.0)
+        filtered_signals[:, i] = sig
 
-from scipy.signal import find_peaks
+    return filtered_signals, fs, leads
 
 def get_r_peaks_per_lead(signals, fs, leads=[0, 1, 2]):
     """
@@ -63,8 +77,6 @@ def get_r_peaks_per_lead(signals, fs, leads=[0, 1, 2]):
             peaks_dict[lead] = pos_peaks.tolist()
 
     return peaks_dict
-
-
 
 def extract_cycles(signals, r_peaks_dict, selected_leads=[0, 1, 2]):
     """
