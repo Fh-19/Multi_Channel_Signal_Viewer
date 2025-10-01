@@ -23,6 +23,9 @@ export default function ECGPage() {
   const [displayStart, setDisplayStart] = useState(0);
   const cycleIdxRef = useRef(0);
 
+  // --- New: Classification results ---
+  const [classificationResult, setClassificationResult] = useState(null);
+
   // --- File Upload ---
   const handleFileChange = (e) => {
     setUploadedFiles(Array.from(e.target.files));
@@ -136,7 +139,7 @@ export default function ECGPage() {
     }, 1000);
   }
 
-  // --- Continuous streaming (FIXED) ---
+  // --- Continuous streaming ---
   function playContinuous() {
     const windowSize = 1000;
     const step = 50; // advance 50 samples (~0.1s at 500Hz) per frame
@@ -200,7 +203,6 @@ export default function ECGPage() {
       line: { width: 1.2 },
     });
 
-    // R-peaks overlay only in mode 2 (continuous)
     if (mode === 2) {
       const peaks = rPeaksNormalized[leadIdx] || [];
       const xs = [], ys = [];
@@ -229,19 +231,23 @@ export default function ECGPage() {
   });
 
   // --- Classification ---
-  const classifyRecord = async () => {
-    try {
-      if (!uploadedFilename) {
-        alert("Please upload an ECG file first.");
-        return;
-      }
-      const result = await classifyEcgRecord(uploadedFilename, "");
-      const { label, confidence } = result;
-      alert(`Predicted: ${label} (${(confidence * 100).toFixed(1)}%)`);
-    } catch (err) {
-      alert(err.message);
+ const classifyRecord = async () => {
+  try {
+    if (!uploadedFilename) {
+      alert("Please upload an ECG file first.");
+      return;
     }
-  };
+    const result = await classifyEcgRecord(uploadedFilename, "");
+    const { label, confidence } = result;
+    setClassificationResult({
+      label,
+      confidence: confidence * 100 // keep it number, not string
+    });
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
 
   return (
     <div style={{ padding: "20px" }}>
@@ -307,6 +313,22 @@ export default function ECGPage() {
         }}
         config={{ displayModeBar: false }}
       />
+
+      {/* --- Classification Results --- */}
+      {classificationResult && (
+        <div style={{ marginTop: "20px", padding: "10px", border: "1px solid #ccc", borderRadius: "8px" }}>
+          <h3>Analysis Result</h3>
+          <p><strong>Label:</strong> {classificationResult.label}</p>
+          <p><strong>Confidence:</strong> {classificationResult.confidence}%</p>
+        </div>
+      )} 
+
+      {classificationResult && (
+        <div style={{ marginTop: "20px", fontSize: "1.2em" }}>
+          <strong>Prediction:</strong>{" "}
+          {classificationResult.confidence < 50 ? "Abnormal ECG" : classificationResult.label}
+        </div>
+      )}
     </div>
   );
 }
