@@ -135,7 +135,7 @@ function ApiPage() {
                 cursor: "pointer",
               }}
             >
-              {isPlaying ? "⏸ Pause" : "▶️ Play"}
+              {isPlaying ? "⏸ Pause" : "▶ Play"}
             </button>
           </div>
         )}
@@ -151,7 +151,7 @@ function ApiPage() {
         }}
       >
         <h2 style={{ marginTop: 0, marginBottom: 12, color: "#263357" }}>
-          📊 Prediction Result
+          Prediction Result
         </h2>
 
         {result ? (
