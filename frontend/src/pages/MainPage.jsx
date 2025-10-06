@@ -4,14 +4,14 @@ function MainPage() {
   return (
     <div style={styles.pageContainer}>
       <div style={styles.card}>
-        <h1 style={styles.title}>Welcome to our sugnal viewer</h1>
+        <h1 style={styles.title}>Multi-Channel Signal Viewer</h1>
         <p style={styles.subtitle}>Select a page to explore your data:</p>
         <div style={styles.buttons}>
-          <Link to="/ecg" style={styles.button}>ECG Page</Link>
-          <Link to="/eeg" style={styles.button}>EEG Page</Link>
-          <Link to="/api" style={styles.button}>API Page</Link>
-          <Link to="/map" style={styles.button}>Map Page</Link>
-          <Link to="/doppler" style={styles.button}>Doppler Page</Link>
+          <Link to="/ecg" style={styles.button}>ECG</Link>
+          <Link to="/eeg" style={styles.button}>EEG</Link>
+          <Link to="/api" style={styles.button}>Drone Detection</Link>
+          <Link to="/map" style={styles.button}>Sentinel Map</Link>
+          <Link to="/doppler" style={styles.button}>Doppler Shift</Link>
         </div>
       </div>
     </div>
