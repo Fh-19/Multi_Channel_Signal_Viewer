@@ -4,6 +4,7 @@ import ECGPage from "./pages/ECGPage.jsx";
 import EEGPage from "./pages/EEGPage.jsx";
 import ApiPage from "./pages/ApiPage.jsx";
 import SentinelMap from "./pages/SentinelMap.jsx";
+import DopplerPage from "./pages/DopplerPage.jsx"; // ✅ Import Doppler page
 
 function App() {
   return (
@@ -16,15 +17,17 @@ function App() {
           <Link to="/eeg" style={styles.link}>EEG</Link>
           <Link to="/api" style={styles.link}>API</Link>
           <Link to="/map" style={styles.link}>MAP</Link>
+          <Link to="/doppler" style={styles.link}>Doppler</Link> {/* New Nav Link */}
         </nav>
 
         {/* Page Routes */}
         <Routes>
-          <Route path="/" element={<MainPage />} /> {/* Main landing page */}
+          <Route path="/" element={<MainPage />} />
           <Route path="/ecg" element={<ECGPage />} />
           <Route path="/eeg" element={<EEGPage />} />
           <Route path="/api" element={<ApiPage />} />
           <Route path="/map" element={<SentinelMap />} />
+          <Route path="/doppler" element={<DopplerPage />} /> {/* New Route */}
         </Routes>
       </div>
     </Router>
