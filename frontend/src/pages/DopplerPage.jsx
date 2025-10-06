@@ -1,3 +1,4 @@
+// frontend/src/pages/DopplerPage.jsx
 import React, { useState } from "react";
 import Plot from "react-plotly.js";
 import { generateDoppler, analyzeDopplerFile } from "../services/dopplerService";
@@ -9,7 +10,7 @@ export default function DopplerPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // --- Generate Doppler WAV ---
+  // --- Generate Doppler WAVE ---
   const handleGenerate = async () => {
     setError(null);
     try {
@@ -18,9 +19,12 @@ export default function DopplerPage() {
       const a = document.createElement("a");
       a.href = url;
       a.download = `doppler_${frequency}Hz_${speed}mps.wav`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Failed to generate Doppler signal");
     }
   };
 
@@ -29,14 +33,23 @@ export default function DopplerPage() {
     setError(null);
     const file = e.target.files[0];
     if (!file) return;
+    
+    // Validate file type
+    if (!file.name.toLowerCase().endsWith('.wav')) {
+      setError("Please upload a WAV file");
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await analyzeDopplerFile(file);
       setAnalysisResult(result);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Failed to analyze file");
     } finally {
       setLoading(false);
+      // Reset file input
+      e.target.value = '';
     }
   };
 
@@ -58,6 +71,7 @@ export default function DopplerPage() {
           borderRight: "2px solid #dbe2ef",
           display: "flex",
           flexDirection: "column",
+          overflowY: "auto",
         }}
       >
         <h1
@@ -81,12 +95,13 @@ export default function DopplerPage() {
             marginBottom: "20px",
           }}
         >
-          <h3 style={{ color: "#2055c0", marginBottom: 10 }}>Generate Doppler WAV</h3>
+          <h3 style={{ color: "#2055c0", marginBottom: 10 }}>Generate Doppler .WAV file</h3>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <label style={{ fontSize: 15 }}>
               Frequency (Hz):{" "}
               <input
                 type="number"
+                min="1"
                 value={frequency}
                 onChange={(e) => setFrequency(Number(e.target.value))}
                 style={{
@@ -102,6 +117,7 @@ export default function DopplerPage() {
               Speed (m/s):{" "}
               <input
                 type="number"
+                min="1"
                 value={speed}
                 onChange={(e) => setSpeed(Number(e.target.value))}
                 style={{
@@ -125,7 +141,7 @@ export default function DopplerPage() {
                 cursor: "pointer",
               }}
             >
-              Generate WAV
+              Generate .WAV file
             </button>
           </div>
         </div>
@@ -143,7 +159,7 @@ export default function DopplerPage() {
           <h3 style={{ color: "#2055c0", marginBottom: 10 }}>Analyze Doppler File</h3>
           <input
             type="file"
-            accept=".wav"
+            accept=".wav,.wave"
             onChange={handleAnalyze}
             style={{
               padding: "8px 10px",
@@ -179,7 +195,7 @@ export default function DopplerPage() {
               {analysisResult.is_doppler ? "✅ Yes" : "❌ No"}
             </p>
             <p>
-              <strong>Trend:</strong> {analysisResult.trend}
+              <strong>Trend:</strong> {analysisResult.trend || "N/A"}
             </p>
             <p>
               <strong>Average Frequency:</strong>{" "}
@@ -212,7 +228,7 @@ export default function DopplerPage() {
           Doppler Visualization
         </h2>
 
-        {analysisResult && analysisResult.freq_series ? (
+        {analysisResult && analysisResult.freq_series && analysisResult.time_series ? (
           <Plot
             data={[
               {
@@ -229,6 +245,7 @@ export default function DopplerPage() {
               margin: { t: 20, l: 50, r: 20, b: 40 },
               xaxis: { title: "Time (s)" },
               yaxis: { title: "Frequency (Hz)" },
+              showlegend: false,
             }}
             config={{ responsive: true, displaylogo: false }}
             style={{ width: "100%" }}
@@ -242,7 +259,7 @@ export default function DopplerPage() {
               textAlign: "center",
             }}
           >
-            Upload a Doppler WAV file to see the analysis visualization here.
+            Upload a Doppler WAV file to see the frequency analysis visualization.
           </div>
         )}
       </div>
