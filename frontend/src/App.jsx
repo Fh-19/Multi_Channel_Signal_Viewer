@@ -10,7 +10,7 @@ function App() {
   return (
     <Router>
       <div style={styles.app}>
-        {/* ✅ Home Button (top-left, not overlapping content) */}
+        {/* Home Button (top-left, not overlapping content) */}
         <Link to="/" style={styles.homeButton}>
           {/* Inline SVG home icon */}
           <svg
@@ -23,15 +23,14 @@ function App() {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            style={{ marginRight: "8px" }}
+            style={{ marginRight: "1px" }}
           >
             <path d="M3 9L12 2l9 7" />
             <path d="M9 22V12h6v10" />
           </svg>
-          Home
         </Link>
 
-        {/* ✅ Page Routes */}
+        {/* Page Routes */}
         <div style={styles.pageContent}>
           <Routes>
             <Route path="/" element={<MainPage />} />
@@ -61,7 +60,7 @@ const styles = {
     alignItems: "center",
     backgroundColor: "#001f3f", // navy blue
     color: "white",
-    padding: "10px 18px",
+    padding: "10px 10px",
     borderRadius: "6px",
     textDecoration: "none",
     fontWeight: "600",
