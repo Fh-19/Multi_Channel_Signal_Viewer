@@ -1,4 +1,4 @@
-// src/pages/EEGPage.jsx
+//EEGPage.jsx
 import { useState, useEffect, useRef, useMemo } from "react";
 import Plot from "react-plotly.js";
 import {
