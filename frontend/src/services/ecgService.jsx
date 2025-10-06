@@ -18,14 +18,3 @@ export const classifyEcgRecord = async (recordNumber, dataFolder = "data") => {
   });
   return response.data;
 };
-// Upload ECG file pair (.dat + .hea)
-export async function uploadEcgFile(files) {
-  const formData = new FormData();
-  files.forEach(f => formData.append("files", f));
-
-  const response = await axios.post(`${API_BASE}/upload`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
-
-  return response.data; // returns { filename: base } from your backend
-}

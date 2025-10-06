@@ -1,7 +1,9 @@
+# file: services/ecg_processing.py
 import os
 import wfdb
 import numpy as np
-from scipy.signal import find_peaks, butter, filtfilt, iirnotch
+from scipy.signal import find_peaks, butter, filtfilt, iirnotch, resample
+import matplotlib.pyplot as plt
 
 # -----------------------
 # DSP / ECG Processing
@@ -19,6 +21,18 @@ def notch_filter(signal, fs, freq=50.0, quality=30):
     w0 = freq / nyq
     b, a = iirnotch(w0, quality)
     return filtfilt(b, a, signal)
+
+# existing helper used by websocket endpoint (kept)
+def load_ecg_record(record_number: str):
+    """
+    Attempts to load a record by base name from uploaded_data.
+    """
+    base = os.path.join(os.path.dirname(__file__), "../uploaded_data", record_number)
+    base_noext, _ = os.path.splitext(base)
+    rec = wfdb.rdrecord(base_noext)
+    signals = rec.p_signal
+    fs = rec.fs
+    return signals, fs
 
 def load_ecg_record_from_path(file_path: str):
     # WFDB reads by base name (no extension)
@@ -38,45 +52,71 @@ def load_ecg_record_from_path(file_path: str):
 
     return filtered_signals, fs, leads
 
-def get_r_peaks_per_lead(signals, fs, leads=[0, 1, 2]):
+def get_r_peaks_per_lead(signals, fs, leads=[0, 1, 2], min_rr_s=0.5):
     """
-    Detect R-peaks for each selected lead.
-    If the negative deflection is taller (larger amplitude),
-    treat those as the R-peaks instead of positive ones.
-    Returns {lead_index: [peak_positions]}.
+    Simple, reliable R-peak detection - similar to what was working before
     """
     peaks_dict = {}
-    distance = int(0.6 * fs)  # ~600 ms between beats
+    distance = int(min_rr_s * fs)
 
     for lead in leads:
-        signal = signals[:, lead]
-
-        # Positive peaks
-        pos_peaks, pos_props = find_peaks(
-            signal,
-            distance=distance,
-            height=np.mean(signal) + 0.5 * np.std(signal)
+        sig = bandpass_filter(signals[:, lead], fs)
+        
+        # Simple approach: detect peaks on the absolute signal
+        # This handles both positive and negative R-waves naturally
+        abs_sig = np.abs(sig)
+        
+        # Adaptive prominence based on signal characteristics
+        prominence = max(0.3 * np.std(abs_sig), 0.1 * np.max(abs_sig))
+        
+        # Find peaks on absolute signal
+        peaks, properties = find_peaks(
+            abs_sig, 
+            distance=distance, 
+            prominence=prominence,
+            height=0.2 * np.max(abs_sig)  # Minimum height threshold
         )
-
-        # Negative peaks (detect on inverted signal)
-        neg_peaks, neg_props = find_peaks(
-            -signal,
-            distance=distance,
-            height=np.mean(-signal) + 0.5 * np.std(-signal)
-        )
-
-        # Check amplitude dominance
-        pos_height = np.max(pos_props["peak_heights"]) if len(pos_peaks) else 0
-        neg_height = np.max(neg_props["peak_heights"]) if len(neg_peaks) else 0
-
-        if neg_height > pos_height:
-            # Negative R-waves dominate
-            peaks_dict[lead] = neg_peaks.tolist()
-        else:
-            # Positive R-waves dominate
-            peaks_dict[lead] = pos_peaks.tolist()
-
+        
+        # Refine peak positions to actual signal extrema
+        refined_peaks = []
+        search_window = int(0.04 * fs)  # 40ms search window
+        
+        for peak in peaks:
+            start = max(0, peak - search_window)
+            end = min(len(sig) - 1, peak + search_window)
+            
+            # Find actual maximum in the original signal (not absolute)
+            segment = sig[start:end + 1]
+            if len(segment) == 0:
+                continue
+                
+            # Find whether positive or negative deflection is stronger
+            max_idx = np.argmax(segment)
+            min_idx = np.argmin(segment)
+            max_val = segment[max_idx]
+            min_val = segment[min_idx]
+            
+            # Choose the larger absolute deflection
+            if abs(min_val) > abs(max_val):
+                actual_peak = min_idx + start
+            else:
+                actual_peak = max_idx + start
+                
+            refined_peaks.append(int(actual_peak))
+        
+        # Remove duplicates and sort
+        refined_peaks = sorted(set(refined_peaks))
+        
+        # Final refractory period enforcement
+        final_peaks = []
+        for peak in refined_peaks:
+            if not final_peaks or (peak - final_peaks[-1]) >= distance:
+                final_peaks.append(peak)
+        
+        peaks_dict[int(lead)] = final_peaks
+    
     return peaks_dict
+
 
 def extract_cycles(signals, r_peaks_dict, selected_leads=[0, 1, 2]):
     """
@@ -88,7 +128,8 @@ def extract_cycles(signals, r_peaks_dict, selected_leads=[0, 1, 2]):
         for i in range(len(r_peaks) - 1):
             start = r_peaks[i]
             end = r_peaks[i + 1]
-            cycle = signals[start:end, lead]
-            lead_cycles.append(cycle.tolist())
+            if end > start:
+                cycle = signals[start:end, lead]
+                lead_cycles.append(cycle.tolist())
         cycles[lead] = lead_cycles
     return cycles
