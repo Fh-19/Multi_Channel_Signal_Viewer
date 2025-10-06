@@ -9,7 +9,7 @@ from flood_detection import detect_water_flood
 # ==== مسارات الملفات ====
 vv_path = r"C:\data\S1C_IW_GRDH_1SDV_20250930T173212_20250930T173237_004357_008A34_2FE9.SAFE\S1C_IW_GRDH_1SDV_20250930T173212_20250930T173237_004357_008A34_2FE9.SAFE\measurement\s1c-iw-grd-vv-20250930t173212-20250930t173237-004357-008a34-001.tiff"
 vh_path = r"C:\data\S1C_IW_GRDH_1SDV_20250930T173212_20250930T173237_004357_008A34_2FE9.SAFE\S1C_IW_GRDH_1SDV_20250930T173212_20250930T173237_004357_008A34_2FE9.SAFE\measurement\s1c-iw-grd-vh-20250930t173212-20250930t173237-004357-008a34-002.tiff"
-detect_water_flood(vv_path, vh_path)
+
 try:
     # ==== قراءة الصور ====
     with rasterio.open(vv_path) as vv_img, rasterio.open(vh_path) as vh_img:
