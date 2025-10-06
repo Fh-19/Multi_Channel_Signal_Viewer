@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 {
   "name": "frontend",
   "private": true,
@@ -33,4 +31,3 @@
     "vite": "^7.1.7"
   }
 }
->>>>>>> 53e2e0dedad54bc2dc0bcc163a365e3877038af5
