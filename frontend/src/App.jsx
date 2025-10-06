@@ -4,49 +4,74 @@ import ECGPage from "./pages/ECGPage.jsx";
 import EEGPage from "./pages/EEGPage.jsx";
 import ApiPage from "./pages/ApiPage.jsx";
 import SentinelMap from "./pages/SentinelMap.jsx";
-import DopplerPage from "./pages/DopplerPage.jsx"; // ✅ Import Doppler page
+import DopplerPage from "./pages/DopplerPage.jsx";
 
 function App() {
   return (
     <Router>
-      <div className="App">
-        {/* Navigation Bar */}
-        <nav style={styles.navbar}>
-          <Link to="/" style={styles.link}>Home</Link>
-          <Link to="/ecg" style={styles.link}>ECG</Link>
-          <Link to="/eeg" style={styles.link}>EEG</Link>
-          <Link to="/api" style={styles.link}>API</Link>
-          <Link to="/map" style={styles.link}>MAP</Link>
-          <Link to="/doppler" style={styles.link}>Doppler</Link> {/* New Nav Link */}
-        </nav>
+      <div style={styles.app}>
+        {/* ✅ Home Button (top-left, not overlapping content) */}
+        <Link to="/" style={styles.homeButton}>
+          {/* Inline SVG home icon */}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ marginRight: "8px" }}
+          >
+            <path d="M3 9L12 2l9 7" />
+            <path d="M9 22V12h6v10" />
+          </svg>
+          Home
+        </Link>
 
-        {/* Page Routes */}
-        <Routes>
-          <Route path="/" element={<MainPage />} />
-          <Route path="/ecg" element={<ECGPage />} />
-          <Route path="/eeg" element={<EEGPage />} />
-          <Route path="/api" element={<ApiPage />} />
-          <Route path="/map" element={<SentinelMap />} />
-          <Route path="/doppler" element={<DopplerPage />} /> {/* New Route */}
-        </Routes>
+        {/* ✅ Page Routes */}
+        <div style={styles.pageContent}>
+          <Routes>
+            <Route path="/" element={<MainPage />} />
+            <Route path="/ecg" element={<ECGPage />} />
+            <Route path="/eeg" element={<EEGPage />} />
+            <Route path="/api" element={<ApiPage />} />
+            <Route path="/map" element={<SentinelMap />} />
+            <Route path="/doppler" element={<DopplerPage />} />
+          </Routes>
+        </div>
       </div>
     </Router>
   );
 }
 
 const styles = {
-  navbar: {
-    display: "flex",
-    justifyContent: "center",
-    gap: "20px",
-    padding: "15px",
-    backgroundColor: "#282c34",
+  app: {
+    fontFamily: "'Segoe UI', sans-serif", // ✅ Font change
+    position: "relative",
+    minHeight: "100vh",
   },
-  link: {
+  homeButton: {
+    position: "fixed",
+    top: "10px",
+    left: "15px",
+    display: "flex",
+    alignItems: "center",
+    backgroundColor: "#001f3f", // navy blue
     color: "white",
+    padding: "10px 18px",
+    borderRadius: "6px",
     textDecoration: "none",
-    fontSize: "18px",
-    fontWeight: "bold",
+    fontWeight: "600",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+    transition: "background-color 0.3s ease",
+    zIndex: 1000, // ensures it stays above page content but not overlapping
+  },
+  pageContent: {
+    paddingTop: "50px", // keeps page content pushed down
+    backgroundColor: "#f0f4f8",
   },
 };
 
