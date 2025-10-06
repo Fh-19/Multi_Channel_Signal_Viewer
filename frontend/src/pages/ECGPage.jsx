@@ -851,7 +851,7 @@ export default function ECGPage() {
   return (
     <div style={{
       display: "flex",
-      height: "210vh",
+      height: "170vh",
       width: "100%",
       background: "#f0f4f8",
       fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
