@@ -1,6 +1,4 @@
-<<<<<<< HEAD
-=======
-// src/pages/EEGPage.jsx
+//EEGPage.jsx
 import { useState, useEffect, useRef, useMemo } from "react";
 import Plot from "react-plotly.js";
 import {
@@ -989,4 +987,3 @@ const handleFileUpload = async (e) => {
 }
 
 export default EEGPage;
->>>>>>> 53e2e0dedad54bc2dc0bcc163a365e3877038af5
