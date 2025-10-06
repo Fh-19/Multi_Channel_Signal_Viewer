@@ -48,7 +48,7 @@ def extract_features(file_path):
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = AudioClassifier()
 model.load_state_dict(torch.load(
-    "F:/Dsp task 1/Multi_Channel_Signal_Viewer/backend/pretrained_models/model.pth",
+    "backend/pretrained_models/model.pth",
     map_location=device
 ))
 model.to(device)

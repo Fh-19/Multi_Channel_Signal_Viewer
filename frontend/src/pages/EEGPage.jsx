@@ -116,35 +116,72 @@ function EEGPage() {
   };
 
   // ----- Upload handler -----
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploadedFile(file);
+  // ----- Upload handler -----
+const handleFileUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  setUploadedFile(file);
 
-    try {
-      const meta = await uploadEegFile(file);
-      setFilename(meta.filename);
-      setAllChannels(meta.channels || []);
-      setChannels((meta.channels || []).slice(0, 3));
-      setFs(meta.sfreq || 250);
-      setBandPowerChannel(null);
-      setXorChannel(null);
+  // NEW: Print file contents to console
+  console.log("=== UPLOADED FILE INFO ===");
+  console.log("File name:", file.name);
+  console.log("File size:", file.size, "bytes");
+  console.log("File type:", file.type);
+  console.log("Last modified:", new Date(file.lastModified).toLocaleString());
 
-      // reset state
-      setSegments([]);
-      setSegmentTimes([]);
-      setBuffer({});
-      setTime([]);
-      setPrediction(null);
-      setPredictionProbs(null);
-      setXorChunks([]);
-      setRecurrencePoints([]);
-      segmentIndexRef.current = 0;
-    } catch (err) {
-      console.error(err);
-      alert("Upload failed. See console.");
-    }
-  };
+  // Read and print file contents for text-based files
+  if (file.type.includes('text') || file.name.endsWith('.txt') || file.name.endsWith('.csv')) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const contents = e.target.result;
+      console.log("=== FILE CONTENTS ===");
+      console.log(contents);
+      console.log("=== END FILE CONTENTS ===");
+    };
+    reader.onerror = (error) => {
+      console.error("Error reading file:", error);
+    };
+    reader.readAsText(file);
+  } else if (file.name.endsWith('.edf') || file.name.endsWith('.set')) {
+    // For binary files like EDF, we can't easily print the contents
+    // but we can show some basic info
+    console.log("=== BINARY FILE (EDF/SET) ===");
+    console.log("This is a binary EEG file. Full content cannot be displayed as text.");
+    
+    // You could read the first few bytes to show some header info
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const arrayBuffer = e.target.result;
+      const uint8Array = new Uint8Array(arrayBuffer.slice(0, 256)); // First 256 bytes
+      console.log("First 256 bytes (hex):", Array.from(uint8Array).map(b => b.toString(16).padStart(2, '0')).join(' '));
+    };
+    reader.readAsArrayBuffer(file.slice(0, 256)); // Only read first 256 bytes
+  }
+
+  try {
+    const meta = await uploadEegFile(file);
+    setFilename(meta.filename);
+    setAllChannels(meta.channels || []);
+    setChannels((meta.channels || []).slice(0, 3));
+    setFs(meta.sfreq || 250);
+    setBandPowerChannel(null);
+    setXorChannel(null);
+
+    // reset state
+    setSegments([]);
+    setSegmentTimes([]);
+    setBuffer({});
+    setTime([]);
+    setPrediction(null);
+    setPredictionProbs(null);
+    setXorChunks([]);
+    setRecurrencePoints([]);
+    segmentIndexRef.current = 0;
+  } catch (err) {
+    console.error(err);
+    alert("Upload failed. See console.");
+  }
+};
 
   // keep it in state for plotting
   useEffect(() => {
@@ -828,55 +865,76 @@ function EEGPage() {
         padding: "20px 24px",
         overflowY: "auto",
         background: "#fff",
+        alignItems: "center",
+        width:"100%"
       }}>
         <h2 style={{ marginTop: 0, marginBottom: 12, color: "#263357" }}>Prediction + Band Powers</h2>
 
-        {/* Prediction */}
-        <div style={{ marginBottom: 25 }}>
-          <div style={{ marginBottom: 8 }}>
-            <button
-              onClick={handlePredict}
-              disabled={isPredicting || !uploadedFile}
-              style={{
-                padding: "10px 18px",
-                borderRadius: 8,
-                border: "none",
-                background: isPredicting ? "#7f93b7" : "#2055c0",
-                color: "#fff",
-                fontWeight: 700,
-                cursor: isPredicting ? "not-allowed" : "pointer"
-              }}
-            >
-              {isPredicting ? "Predicting..." : "Predict Disease"}
-            </button>
-          </div>
+        {/* Prediction + Band Powers */}
+<div style={{ marginTop: 25 }}>
+  <button
+    onClick={handlePredict}
+    style={{
+      backgroundColor: "#2055c0",
+      color: "white",
+      border: "none",
+      borderRadius: 6,
+      padding: "6px 12px",
+      fontWeight: 600,
+      cursor: "pointer",
+      marginBottom: 10,
+    }}
+  >
+    Predict Disease
+  </button>
 
-          {predictionProbs ? (
-            <>
-              <div style={{ fontSize: 15, marginBottom: 8 }}>
-                Predicted: <strong style={{ color: colorPalette[prediction] || "#2055c0" }}>{prediction}</strong>
-              </div>
-              <Plot
-                data={[{
-                  type: "bar",
-                  x: Object.values(predictionProbs),
-                  y: Object.keys(predictionProbs),
-                  orientation: "h",
-                  marker: { color: Object.keys(predictionProbs).map(cls => colorPalette[cls] || "#2055c0") },
-                  text: Object.values(predictionProbs).map(v => (v * 100).toFixed(1) + "%"),
-                  textposition: "auto",
-                }]}
-                layout={{ margin: { l: 70, r: 20, t: 10, b: 20 }, height: 260, xaxis: { range: [0,1], title: "Probability" } }}
-                config={{ displayModeBar: false }}
-                style={{ width: "100%" }}
-              />
-            </>
-          ) : prediction ? (
-            <div style={{ fontWeight: 700, color: "#2055c0" }}>Predicted: {prediction}</div>
-          ) : (
-            <div style={{ color: "#8d97b6" }}>No prediction yet.</div>
-          )}
-        </div>
+  {predictionProbs ? (
+    <>
+      <div style={{ fontSize: 15, marginBottom: 8 }}>
+        Predicted:{" "}
+        <strong style={{ color: colorPalette[prediction] || "#2055c0" }}>
+          {prediction}
+        </strong>
+      </div>
+
+      <Plot
+        data={[
+          {
+            type: "bar",
+            x: Object.values(predictionProbs),
+            y: Object.keys(predictionProbs),
+            orientation: "h",
+            marker: {
+              color: Object.keys(predictionProbs).map(
+                (cls) => colorPalette[cls] || "#2055c0"
+              ),
+            },
+            text: Object.values(predictionProbs).map(
+              (v) => (v * 100).toFixed(1) + "%"
+            ),
+            textposition: "auto",
+          },
+        ]}
+        layout={{
+          height: 250,
+          margin: { t: 20, l: 120, r: 30, b: 40 },
+          xaxis: { title: "Probability", range: [0, 1] },
+          yaxis: { automargin: true },
+          title: `Prediction Probabilities`,
+        }}
+        config={{ displayModeBar: false, responsive: true }}
+        style={{ width: "100%" }}
+      />
+    </>
+  ) : prediction ? (
+    <div style={{ fontWeight: 700, color: "#2055c0" }}>
+      Predicted: {prediction}
+    </div>
+  ) : (
+    <div style={{ color: "#8d97b6" }}>No prediction yet.</div>
+  )}
+</div>
+
 
         {/* Band Power Chart */}
         <div style={{ marginTop: 25 }}>

@@ -9,7 +9,7 @@ function App() {
   return (
     <Router>
       <div className="App">
-        {/* ✅ Navigation Bar */}
+        {/* Navigation Bar */}
         <nav style={styles.navbar}>
           <Link to="/" style={styles.link}>Home</Link>
           <Link to="/ecg" style={styles.link}>ECG</Link>
@@ -18,7 +18,7 @@ function App() {
           <Link to="/map" style={styles.link}>MAP</Link>
         </nav>
 
-        {/* ✅ Page Routes */}
+        {/* Page Routes */}
         <Routes>
           <Route path="/" element={<MainPage />} /> {/* Main landing page */}
           <Route path="/ecg" element={<ECGPage />} />
