@@ -1,15 +1,18 @@
-# model.py
+import os
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 
-# Load features
-X_train = np.load("features/X_train.npy")
-y_train = np.load("features/y_train.npy")
-X_val = np.load("features/X_val.npy")
-y_val = np.load("features/y_val.npy")
+# Build correct path to features inside pretrained_models
+BASE_DIR = os.path.dirname(__file__)  # backend/pretrained_models
+FEATURES_DIR = os.path.join(BASE_DIR, "features")
+
+X_train = np.load(os.path.join(FEATURES_DIR, "X_train.npy"))
+y_train = np.load(os.path.join(FEATURES_DIR, "y_train.npy"))
+X_val = np.load(os.path.join(FEATURES_DIR, "X_val.npy"))
+y_val = np.load(os.path.join(FEATURES_DIR, "y_val.npy"))
 
 # Convert to tensors
 X_train_tensor = torch.tensor(X_train, dtype=torch.float32)

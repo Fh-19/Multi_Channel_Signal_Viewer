@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import Plot from "react-plotly.js";
-import { generateDoppler, analyzeDopplerFile } from "../services/dopplerService";
+import axios from "axios";
 
 export default function DopplerPage() {
   const [frequency, setFrequency] = useState(1000);
@@ -9,18 +9,28 @@ export default function DopplerPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const BACKEND_URL = "http://127.0.0.1:5000"; // 🔹 غيّريها لو السيرفر بتاعك شغال على port تاني
+
   // --- Generate Doppler WAV ---
   const handleGenerate = async () => {
     setError(null);
     try {
-      const blob = await generateDoppler(frequency, speed);
-      const url = URL.createObjectURL(blob);
+      const response = await axios.post(
+        `${BACKEND_URL}/generate_doppler`,
+        { frequency, speed },
+        { responseType: "blob" } // علشان يرجع ملف WAV
+      );
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
       const a = document.createElement("a");
       a.href = url;
       a.download = `doppler_${frequency}Hz_${speed}mps.wav`;
+      document.body.appendChild(a);
       a.click();
+      a.remove();
     } catch (err) {
-      setError(err.message);
+      setError("Error generating Doppler WAV file.");
+      console.error(err);
     }
   };
 
@@ -31,10 +41,17 @@ export default function DopplerPage() {
     if (!file) return;
     setLoading(true);
     try {
-      const result = await analyzeDopplerFile(file);
-      setAnalysisResult(result);
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await axios.post(`${BACKEND_URL}/analyze_doppler`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      setAnalysisResult(response.data);
     } catch (err) {
-      setError(err.message);
+      console.error(err);
+      setError("Error analyzing file. Make sure backend is running.");
     } finally {
       setLoading(false);
     }
