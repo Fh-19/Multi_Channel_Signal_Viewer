@@ -4,7 +4,7 @@ function MainPage() {
   return (
     <div style={styles.pageContainer}>
       <div style={styles.card}>
-        <h1 style={styles.title}>Welcome to our sugnal viewer</h1>
+        <h1 style={styles.title}>Welcome to our signal viewer</h1>
         <p style={styles.subtitle}>Select a page to explore your data:</p>
         <div style={styles.buttons}>
           <Link to="/ecg" style={styles.button}>ECG Page</Link>
