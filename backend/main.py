@@ -23,7 +23,7 @@ app.include_router(ecg.router, prefix="/api/ecg")
 app.include_router(eeg.router, prefix="/api/eeg")
 app.include_router(api.router)
 app.include_router(raddar.router, prefix="/api/radar")
-app.include_router(doppler.router, prefix="/api/doppler")  # ✅ Doppler router
+app.include_router(doppler.router, prefix="/api/doppler") 
 
 @app.get("/")
 def root():

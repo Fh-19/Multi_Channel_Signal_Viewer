@@ -1,55 +1,98 @@
-// frontend/src/pages/DopplerPage.jsx
 import React, { useState } from "react";
 import Plot from "react-plotly.js";
-import { generateDoppler, analyzeDopplerFile } from "../services/dopplerService";
+import {
+  generateDoppler,
+  playDoppler,
+  uploadDopplerFile,
+  predictDopplerFile,
+} from "../services/dopplerService";
 
 export default function DopplerPage() {
-  const [frequency, setFrequency] = useState(1000);
-  const [speed, setSpeed] = useState(30);
-  const [analysisResult, setAnalysisResult] = useState(null);
+  const [frequency, setFrequency] = useState(300);
+  const [speed, setSpeed] = useState(90);
+  const [realisticMode, setRealisticMode] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState(null);
+  const [prediction, setPrediction] = useState(null);
   const [error, setError] = useState(null);
+  const [waveform, setWaveform] = useState(null); // store waveform data for plotting
 
-  // --- Generate Doppler WAVE ---
+  // 📡 Handle simulation playback
+  const handlePlay = async () => {
+    setError(null);
+    setPlaying(true);
+    try {
+      await playDoppler(frequency, speed, realisticMode);
+      setTimeout(() => setPlaying(false), 8000);
+    } catch (err) {
+      setError(
+        err.response?.data?.detail ||
+          err.message ||
+          "Failed to play Doppler signal"
+      );
+      setPlaying(false);
+    }
+  };
+
+  // 🎧 Generate and download file
   const handleGenerate = async () => {
     setError(null);
     try {
-      const blob = await generateDoppler(frequency, speed);
+      const blob = await generateDoppler(frequency, speed, realisticMode);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `doppler_${frequency}Hz_${speed}mps.wav`;
+      const mode = realisticMode ? "realistic" : "basic";
+      a.download = `doppler_${mode}_${frequency}Hz_${speed}kmh.wav`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err.message || "Failed to generate Doppler signal");
+      setError(
+        err.response?.data?.detail ||
+          err.message ||
+          "Failed to generate Doppler signal"
+      );
     }
   };
 
-  // --- Analyze uploaded WAV ---
-  const handleAnalyze = async (e) => {
+  // ⬆️ Upload and auto-predict file
+  const handleFileUpload = async (e) => {
     setError(null);
     const file = e.target.files[0];
     if (!file) return;
-    
-    // Validate file type
-    if (!file.name.toLowerCase().endsWith('.wav')) {
+    if (!file.name.toLowerCase().endsWith(".wav")) {
       setError("Please upload a WAV file");
       return;
     }
 
     setLoading(true);
     try {
-      const result = await analyzeDopplerFile(file);
-      setAnalysisResult(result);
+      const result = await uploadDopplerFile(file);
+      setUploadStatus(result);
+      setUploadStatus({ ...result, filename: file.name });
+
+      // Auto-run prediction
+      const pred = await predictDopplerFile(file);
+      setPrediction(pred);
+
+      // visualize waveform
+      const arrayBuffer = await file.arrayBuffer();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      const channelData = audioBuffer.getChannelData(0);
+      const sampleStep = Math.floor(channelData.length / 1000);
+      const waveformData = channelData.filter(
+        (_, i) => i % sampleStep === 0
+      );
+      setWaveform(waveformData);
     } catch (err) {
-      setError(err.message || "Failed to analyze file");
+      setError(err.message || "Failed to upload/predict");
     } finally {
       setLoading(false);
-      // Reset file input
-      e.target.value = '';
+      e.target.value = "";
     }
   };
 
@@ -63,12 +106,11 @@ export default function DopplerPage() {
         fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
       }}
     >
-      {/* LEFT SIDE: Controls */}
+      {/* Left: Control Panel */}
       <div
         style={{
-          flex: 3,
+          flex: 1,
           padding: "28px",
-          borderRight: "2px solid #dbe2ef",
           display: "flex",
           flexDirection: "column",
           overflowY: "auto",
@@ -82,26 +124,63 @@ export default function DopplerPage() {
             color: "#263357",
           }}
         >
-          Doppler Signal Generator & Analyzer
+          Doppler Shift Simulator
         </h1>
+
+        {/* Simulation Mode */}
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 12,
+            padding: 16,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            marginBottom: 20,
+          }}
+        >
+          <h3 style={{ color: "#2055c0", marginBottom: 10 }}>Simulation Mode</h3>
+          <div style={{ display: "flex", gap: 15, alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="radio"
+                checked={realisticMode}
+                onChange={() => setRealisticMode(true)}
+              />
+              Realistic Car Simulation
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="radio"
+                checked={!realisticMode}
+                onChange={() => setRealisticMode(false)}
+              />
+              Basic Doppler Tone
+            </label>
+          </div>
+        </div>
 
         {/* Generate Section */}
         <div
           style={{
             background: "#fff",
             borderRadius: 12,
-            padding: "16px",
+            padding: 16,
             boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-            marginBottom: "20px",
+            marginBottom: 20,
           }}
         >
-          <h3 style={{ color: "#2055c0", marginBottom: 10 }}>Generate Doppler .WAV file</h3>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <label style={{ fontSize: 15 }}>
+          <h3 style={{ color: "#2055c0", marginBottom: 10 }}>Parameters</h3>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              marginBottom: 10,
+            }}
+          >
+            <label>
               Frequency (Hz):{" "}
               <input
                 type="number"
-                min="1"
                 value={frequency}
                 onChange={(e) => setFrequency(Number(e.target.value))}
                 style={{
@@ -112,12 +191,10 @@ export default function DopplerPage() {
                 }}
               />
             </label>
-
-            <label style={{ fontSize: 15 }}>
-              Speed (m/s):{" "}
+            <label>
+              Speed (km/h):{" "}
               <input
                 type="number"
-                min="1"
                 value={speed}
                 onChange={(e) => setSpeed(Number(e.target.value))}
                 style={{
@@ -128,7 +205,22 @@ export default function DopplerPage() {
                 }}
               />
             </label>
-
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={handlePlay}
+              disabled={playing}
+              style={{
+                background: playing ? "#8d97b6" : "#28a745",
+                color: "#fff",
+                border: "none",
+                borderRadius: 8,
+                padding: "8px 16px",
+                fontWeight: 600,
+              }}
+            >
+              {playing ? "🔊 Playing..." : "▶ Hear Simulation"}
+            </button>
             <button
               onClick={handleGenerate}
               style={{
@@ -138,128 +230,117 @@ export default function DopplerPage() {
                 borderRadius: 8,
                 padding: "8px 16px",
                 fontWeight: 600,
-                cursor: "pointer",
               }}
             >
-              Generate .WAV file
+              ⬇ Download .WAV
             </button>
           </div>
         </div>
 
-        {/* Analyze Section */}
+        {/* Upload Section */}
         <div
           style={{
             background: "#fff",
             borderRadius: 12,
-            padding: "16px",
+            padding: 16,
             boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-            marginBottom: "20px",
-          }}
+         }}
         >
-          <h3 style={{ color: "#2055c0", marginBottom: 10 }}>Analyze Doppler File</h3>
+        
+          <h3 style={{ color: "#2055c0", marginBottom: 10 }}>Upload Audio</h3>
           <input
             type="file"
-            accept=".wav,.wave"
-            onChange={handleAnalyze}
+            accept=".wav"
+            onChange={handleFileUpload}
             style={{
-              padding: "8px 10px",
-              borderRadius: 6,
-              border: "1px solid #ccc",
-              background: "#fafeff",
-              width: "100%",
-              maxWidth: 300,
-            }}
-          />
-
-          {loading && (
-            <p style={{ marginTop: 10, color: "#8d97b6" }}>Analyzing file...</p>
-          )}
-          {error && (
-            <p style={{ marginTop: 10, color: "red" }}>Error: {error}</p>
-          )}
-        </div>
-
-        {/* Result */}
-        {analysisResult && (
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 12,
-              padding: "16px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-            }}
-          >
-            <h3 style={{ color: "#2055c0", marginBottom: 10 }}>Analysis Result</h3>
-            <p>
-              <strong>Is Doppler Signal:</strong>{" "}
-              {analysisResult.is_doppler ? "✅ Yes" : "❌ No"}
-            </p>
-            <p>
-              <strong>Trend:</strong> {analysisResult.trend || "N/A"}
-            </p>
-            <p>
-              <strong>Average Frequency:</strong>{" "}
-              {analysisResult.freq_mean?.toFixed(2)} Hz
-            </p>
-            <p>
-              <strong>Estimated Speed:</strong>{" "}
-              {analysisResult.speed_est?.toFixed(2)} m/s
-            </p>
-          </div>
+            padding: "8px 10px",
+            borderRadius: 6,
+            border: "1px solid #ccc",
+            width: "100%",
+            maxWidth: 300,
+          }}
+        />
+        {loading && (
+          <p style={{ marginTop: 10, color: "#8d97b6" }}>Processing...</p>
         )}
-      </div>
+        {error && (
+          <p style={{ marginTop: 10, color: "red" }}>Error: {error}</p>
+        )}
 
-      {/* RIGHT SIDE: Visualization */}
+      {/* New upload complete message */}
+      {uploadStatus && (
+        <p
+          style={{
+            marginTop: 10,
+            color: "#2e7d32",
+            background: "#e8f5e9",
+            padding: "8px 12px",
+            borderRadius: 6,
+            fontWeight: 500,
+         }}
+        >
+          ✅ Upload complete: <b>{uploadStatus.filename}</b>
+        </p>
+      )}
+      </div>
+      </div>
+      {/* Right: Waveform and Predictions */}
       <div
         style={{
-          flex: 5,
+          flex: 1.2,
           padding: "28px",
           overflowY: "auto",
+          background: "#fff",
+          margin: "28px",
+          borderRadius: 12,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
         }}
       >
-        <h2
-          style={{
-            marginBottom: 16,
-            color: "#263357",
-            fontWeight: 700,
-            fontSize: 22,
-          }}
-        >
-          Doppler Visualization
+        <h2 style={{ color: "#2055c0", marginBottom: 20 }}>
+          Uploaded Audio Waveform
         </h2>
 
-        {analysisResult && analysisResult.freq_series && analysisResult.time_series ? (
+        {waveform ? (
           <Plot
             data={[
               {
-                x: analysisResult.time_series,
-                y: analysisResult.freq_series,
+                x: Array.from({ length: waveform.length }, (_, i) => i),
+                y: waveform,
                 type: "scatter",
                 mode: "lines",
-                line: { color: "#2055c0", width: 2 },
-                name: "Instantaneous Frequency",
+                line: { color: "#2055c0", width: 1 },
               },
             ]}
             layout={{
-              height: 400,
-              margin: { t: 20, l: 50, r: 20, b: 40 },
-              xaxis: { title: "Time (s)" },
-              yaxis: { title: "Frequency (Hz)" },
-              showlegend: false,
+              height: 350,
+              margin: { t: 10, r: 10, l: 40, b: 30 },
+              xaxis: { title: "Sample" },
+              yaxis: { title: "Amplitude" },
             }}
-            config={{ responsive: true, displaylogo: false }}
             style={{ width: "100%" }}
           />
         ) : (
+          <p style={{ color: "#666" }}>
+            No waveform yet — upload a WAV file to visualize it.
+          </p>
+        )}
+
+        {prediction && (
           <div
             style={{
-              color: "#8d97b6",
-              fontSize: 16,
-              marginTop: 40,
-              textAlign: "center",
+              marginTop: 30,
+              background: "#e8f5e8",
+              padding: 16,
+              borderRadius: 8,
             }}
           >
-            Upload a Doppler WAV file to see the frequency analysis visualization.
+            <h3 style={{ color: "#2055c0" }}>Predicted Parameters</h3>
+            <p style={{ color: "#333" }}>
+              <b>Speed:</b> {prediction.pred_speed_kmh.toFixed(2)} km/h
+            </p>
+            <p style={{ color: "#333" }}>
+              <b>Frequency:</b> {prediction.pred_freq_hz.toFixed(2)} Hz
+            </p>
           </div>
         )}
       </div>
