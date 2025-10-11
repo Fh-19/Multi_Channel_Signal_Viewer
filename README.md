@@ -264,8 +264,8 @@ Example User Flow:
 
 This project performs land classification using **Sentinel-1 SAR images**.It classifies regions into Urban, Vegetation, or Water using VV and VH polarization bands.
 The system combines SAR image preprocessing, K-Means clustering, a FastAPI backend, and a React frontend for interactive visualization.
-=======
->>>>>>> d317721b761801f45eb308885dc9e5f5190fc0c4
+
+
 
 
  ## Overview
