@@ -1,5 +1,5 @@
-# EEG Page:
-This page is responsible for classifying between five classes (Dementia, Alzheimer's, Schizophrenia, Epilepsy, and Healthy) using a pre-trained simplified EEGNet model.
+# EEG Signal Analysis Module:
+The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that provides advanced processing, visualization, and AI-powered interpretation of electroencephalography (EEG) signals. This page is responsible for classifying between five classes (Dementia, Alzheimer's, Schizophrenia, Epilepsy, and Healthy) using a pre-trained simplified EEGNet model.
 
 <img width="1919" height="977" alt="Image" src="https://github.com/user-attachments/assets/9ce1d555-1aef-4b19-9be9-36c1d2789793" />
 
@@ -100,3 +100,56 @@ This page is responsible for classifying between five classes (Dementia, Alzheim
   
 - Configuration: Select any two channels for cross-channel analysis
 - Insights: Non-linear dynamics and inter-channel dependencies
+
+  # Doppler Shift Analysis Module
+The Doppler Shift Simulator is a sophisticated web application that demonstrates and analyzes the Doppler effect, a phenomenon where the frequency of a wave changes for an observer moving relative to the wave source. This module provides both simulation and analysis capabilities for Doppler shift phenomena, with a focus on realistic vehicle pass-by scenarios.
+
+## Physics Principle:
+     `f_observed = f_source × (v_sound / (v_sound ± v_relative))`
+where: 
+`f_observed` = Frequency heard by observer
+`f_source` = Original Frequency emitted
+`v_sound` = Speed of sound
+`v_relative` = Relative velocity between source and observer
+
+<img width="1915" height="876" alt="Image" src="https://github.com/user-attachments/assets/6a5dd458-948a-406f-a5df-d1c513778aaf" />
+
+## Realistic simulation Components:
+- **Engine Harmonics**: Multiple frequency components with proper ratios
+- **Distance Attenuation**: Inverse-square law intensity variation
+- **Spatial Audio**: Stereo panning based on vehicle position
+- **Environmental Effects**: Road noise, reverberation, vibration
+- **RPM Variation**: Realistic engine acceleration/deceleration profiles
+
+## Audio Processing
+- Sample Rate: 44.1 kHz
+- Format: Mono WAV files
+- Duration: 8 seconds (realistic simulation)
+- Dynamic Range: Normalized to prevent clipping
+  
+## Module Features:
+1. Dual Simulation Modes:
+     - **Realistic Car Simulation**:
+               - Multi-layered audio synthesis
+               - Environmental acoustics
+               - Spatial positioning effects
+               - Limited to 2kHz (human hearing range)
+     - **Basic Doppler Tone**:
+               - Pure frequency demonstration
+               - Extended frequency range (up to 20kHz)
+               - Higher speed simulations
+2. Waveform Display representing the amplitude of the audio signal over time
+     - X-axis: Time domain (sample index)
+     - Y-axis: Amplitude (normalized between -1.0 and +1.0)
+     - Visual Pattern: Shows the characteristic "Doppler sweep" where frequency changes as the sound source moves.
+4. Prediction Dashboard
+   <img width="1919" height="881" alt="Image" src="https://github.com/user-attachments/assets/fcb0719e-414b-465f-a38a-5948ec19a8af" />
+- Approaching Phase: Waveform shows higher frequency (closer spacing between peaks)
+- Passing Point: Maximum frequency at closest approach
+- Receding Phase: Lower frequency (wider spacing between peaks)
+- Amplitude Envelope: Louder when closer, quieter when farther due to distance attenuation
+
+
+
+
+    
