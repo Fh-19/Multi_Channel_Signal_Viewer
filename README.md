@@ -1,5 +1,19 @@
+# Multi-Channel Signal Viewer:
+## Project Overview
+This project provides an integrated platform for handling 1D medical and non-medical signals. It performs advanced digital signal processing, offers multi-modal visualization tools, and integrates AI-driven classification models for intelligent inference and analysis.
+- Medical Signals: Electrocardiography (ECG) and Electroencephalography (EEG) signals, with tools for preprocessing, visualization, and deep learning-based classification.
+- Non-medical Signals: Acoustic and radar-related signals including drone sound detection, Doppler signal generation and classification, and SAR (Synthetic Aperture Radar) signal visualization.
+
+**To run our website:**
+- Navigate to the project directory and run:
+`concurrently "uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000" "cd frontend && npm run dev"`
+
 # ECG Signal Analysis Module:
 THE ECG Sigal Analysis Module provides advanced processing, visualization, and AI-powered interpretation of Electrocardiography (ECG) signals. This page integrates a two-stage classifier. The first classifier is a multiclass classifier identifying six cardiac abnormalities in ECG signals, the second is a finetuned binary classifier that is activated if the first classifier detected none of the six abnormalities in the ECG record. The binary classifier identifies if the ECG signal is a normal ECG or if there are other cardiac abnormalities.
+- The pretrained six-class model: https://zenodo.org/records/3625027
+- The finetuned binary class model: https://drive.google.com/drive/folders/1gHLrDYc_wD8a-gDqaJAP7gDXjteVa2yW?usp=sharing 
+<img width="1886" height="869" alt="image" src="https://github.com/user-attachments/assets/c1fc8e6d-2f1b-477b-8128-5d5d583999b3" />
+
 ## Backend API Endpoints:
 `POST /upload`
 - Purpose: Uploads and validates ECG files.
@@ -10,11 +24,11 @@ THE ECG Sigal Analysis Module provides advanced processing, visualization, and A
 - Purpose: Loads an uploaded ECG record and returns: ECG signals, sampling rate, r-peak locations, extracted heart cycles, lead names.
 - Input: filename, leads.
 - Output: {
-  "signals": [[...], [...]],         // ECG samples
-  "fs": 400.0,                       // Sampling frequency
-  "r_peaks": { "0": [100, 350, ...] },
-  "cycles": { "0": [[...], [...]] }, // Extracted heartbeat segments
-  "lead_names": ["I", "II", "III"]}
+  `signals`: [[...], [...]],         // ECG samples
+  `fs`: 400.0,                       // Sampling frequency
+  `r_peaks`: { "0": [100, 350, ...] },
+  `cycles`: { "0": [[...], [...]] }, // Extracted heartbeat segments
+  `lead_names`: ["I", "II", "III"]}
 
 `POST /classify`
 - Purpose: Classifies an uploaded ECG record as: one of six cardiac abnormalities using a 6-class deep learning model, or normal / other abnormalities using a       binary fallback model
@@ -24,6 +38,79 @@ THE ECG Sigal Analysis Module provides advanced processing, visualization, and A
     3. Predict probabilities across six classes: "1dAVb", "RBBB", "LBBB", "SB", "AF", "ST"
     4. If top-class confidence ≥ 0.3 → return that class.
     5. Otherwise, preprocess for binary model and classify as: "Normal ECG" or "Other Cardiac Abnormalities"
+- Output: Prediction probabilities for all classes.
+
+## Signal Processing Pipeline:
+### Signal Viewer Preprocessing Steps:
+- **Band-pass filtering**: 0.5-30 Hz to remove baseline wander, high-frequency muscle noise, powerline interference (50 Hz).
+- **Notch filter**: 50 Hz to remove AC hum.
+- **R-Peak detection**: Find R-peak indices (for dynamic cycle classification).
+- **Heartbeat Segmentation**: Use R-Peak indices to segment the ECG signal into individual heartbeat cycles.  
+### Abnormality Classification Preprocessing Steps:  
+The pretrained models are trained on raw ECG signals.  
+#### **6-Class Model** (expects 12 leads):  
+  - Resample all signals to 400 Hz.
+  - Crop/pad exactly 4096 samples (10.24s).
+  - Normalize each lead separately (zero mean, unit variance).  
+#### **Binary Class Model** (expects lead I only):  
+  - Resample signals to 300 Hz.
+  - Pad/truncate to 9000 samples (30s).
+  - Normalize lead (zero mean, unit variance).
+## Visualization Features:
+- Multi-lead selection (max 3 leads).
+- Overlapping plot of all selected leads for effective comparison.
+- Continuous signal viewing mode and cycle-by-cycle signal viewing mode.
+- Adjustable window sizes: 1-5s for the continuous signal viewer, 0.5-1.5 x R-R interval for the cycle-by-cycle signal viewer (to take into account the variability between cycle periods).
+- Play/Pause with speed adjustment (0.5-1.5x).
+- Zoom in/out.
+
+<img width="1096" height="748" alt="image" src="https://github.com/user-attachments/assets/3937a04b-91b6-4759-bcb1-b3b573f8b185" />
+<img width="1149" height="780" alt="image" src="https://github.com/user-attachments/assets/1b50bf77-5e3d-4eeb-9dab-2d9a22798fc6" />
+
+## Predictions:
+- The output of the 6-class model is displayed along with the probability of each class, the predicted disease is the one with the highest probability.
+- If the highest probability is less than 30%, the predicted disease is the fallback binary model's output (Normal ECG or Other Cardiac Abnormalities).
+<img width="1860" height="856" alt="image" src="https://github.com/user-attachments/assets/1733ce9b-be7b-420e-91b9-81b56bedec90" />
+<img width="1861" height="859" alt="image" src="https://github.com/user-attachments/assets/94140aff-ac5f-490b-9b38-920cf1fcd86e" />
+<img width="1848" height="856" alt="image" src="https://github.com/user-attachments/assets/c2cd721e-2613-4684-8945-b71b7652e2f0" />
+
+## Advanced Visualizations:
+- User can switch between visualization modes using the dropdown and configure parameters specific to each one while monitoring real-time updates as data streams.
+- All advanced modes depend on the cycle-by-cycle viewer (they update cycle by cycle).
+1. `XOR Graph`:
+ - Purpose: Highlight irregularities and differences between consecutive cycles, making it easier to detect abnormal or inconsistent cardiac patterns.
+ - Mechanism: Compares signal chunks using mean absolute difference.
+ - Controls:
+   - XOR tolerance (V) for similarity detection.
+   - Window size (xR-R).
+   - Lead Selection (Single lead).
+   - Reset plot.
+   <img width="1026" height="645" alt="image" src="https://github.com/user-attachments/assets/a1ff4c9e-4c17-429b-b2f4-3628f6339d63" />
+  
+2. `Recurrence Graph`:
+  - Purpose: Analyze cross-lead relationships (Only two leads can be selected for this mode).
+  - Mechanism: Compares two different leads using Cross Recurrence Plot (CRP) analysis.
+  - Two display types:
+     - Heatmap (matrix showing recurrence density).
+     - Scatter Plot (Points where signals are similar with color illustration).
+  - Controls:
+     - Color Scale.
+     - Clear Recurrence Matrix.
+      <img width="877" height="638" alt="image" src="https://github.com/user-attachments/assets/3900dbbe-961e-4ab5-99d1-66b8eab1957d" /> 
+      <img width="877" height="639" alt="image" src="https://github.com/user-attachments/assets/c4cc5f00-c54d-4393-830f-c54a384fd827" />
+
+3. `Polar Graph`:
+   - Purpose: Create circular patterns that reveal rhythm abnormalities.
+   - Mechanism: Interpolate and normalize ECG cycles to 200 points, convert all cycles into polar coordinates for circular visualization (time (θ) to angle (0-    
+   360°) and amplitude (r) to radial distance).
+   - Two display types:
+     - Cumulative (accumulated signals over time).
+     - Latest Window (Current signal only).
+   - Controls:
+     - Clear polar plot.
+     <img width="877" height="634" alt="image" src="https://github.com/user-attachments/assets/efcbe67e-1245-4c0c-99e6-99ef3b41df34" />
+     <img width="877" height="636" alt="image" src="https://github.com/user-attachments/assets/d5b822a9-501f-4a2c-928f-54287c310e32" />
+
 # EEG Signal Analysis Module:
 The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that provides advanced processing, visualization, and AI-powered interpretation of electroencephalography (EEG) signals. This page is responsible for classifying between five classes (Dementia, Alzheimer's, Schizophrenia, Epilepsy, and Healthy) using a pre-trained simplified EEGNet model.
 
@@ -83,6 +170,7 @@ The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that
 - Adjustable Window: Configurable time window (1-60 seconds)
 - Playback Controls: Play/pause with speed adjustment (0.25x-4x)
 - Channel Selection: Interactive toggle for up to 5 channels
+- Zoom in/out
 <img width="1254" height="831" alt="Image" src="https://github.com/user-attachments/assets/4c38d7be-77a4-4207-b728-6f3b82be61d0" />
 <img width="1281" height="782" alt="Image" src="https://github.com/user-attachments/assets/fac48173-7603-4033-adc4-f3a01256b2b7" />
 
