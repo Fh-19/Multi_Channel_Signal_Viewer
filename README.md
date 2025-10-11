@@ -1,6 +1,7 @@
 # EEG Page:
-This page is responsible for classifying between 5 classes (Dementia, Alzheimer, Schizophrenia, Epiepsy and Healthy) by using a pretrained simplified EEGNet model.
+This page is responsible for classifying between 5 classes (Dementia, Alzheimer's, Schizophrenia, Epilepsy, and Healthy) by using a pretrained simplified EEGNet model.
 
+<img width="1919" height="977" alt="Image" src="https://github.com/user-attachments/assets/9ce1d555-1aef-4b19-9be9-36c1d2789793" />
 
 ## Backend API Endpoints:
 `POST /upload`
