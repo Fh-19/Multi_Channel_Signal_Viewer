@@ -1,3 +1,29 @@
+# ECG Signal Analysis Module:
+THE ECG Sigal Analysis Module provides advanced processing, visualization, and AI-powered interpretation of Electrocardiography (ECG) signals. This page integrates a two-stage classifier. The first classifier is a multiclass classifier identifying six cardiac abnormalities in ECG signals, the second is a finetuned binary classifier that is activated if the first classifier detected none of the six abnormalities in the ECG record. The binary classifier identifies if the ECG signal is a normal ECG or if there are other cardiac abnormalities.
+## Backend API Endpoints:
+`POST /upload`
+- Purpose: Uploads and validates ECG files.
+- Input: Multipart form-data containing .dat and .hea files
+- Output: "filename": "record_name"
+
+`GET /ecg`
+- Purpose: Loads an uploaded ECG record and returns: ECG signals, sampling rate, r-peak locations, extracted heart cycles, lead names.
+- Input: filename, leads.
+- Output: {
+  "signals": [[...], [...]],         // ECG samples
+  "fs": 400.0,                       // Sampling frequency
+  "r_peaks": { "0": [100, 350, ...] },
+  "cycles": { "0": [[...], [...]] }, // Extracted heartbeat segments
+  "lead_names": ["I", "II", "III"]}
+
+`POST /classify`
+- Purpose: Classifies an uploaded ECG record as: one of six cardiac abnormalities using a 6-class deep learning model, or normal / other abnormalities using a       binary fallback model
+- Process:
+    1. Load ECG record with wfdb.rdrecord.
+    2. Preprocess for the 6-class model (resampling, padding/truncating).
+    3. Predict probabilities across six classes: "1dAVb", "RBBB", "LBBB", "SB", "AF", "ST"
+    4. If top-class confidence ≥ 0.3 → return that class.
+    5. Otherwise, preprocess for binary model and classify as: "Normal ECG" or "Other Cardiac Abnormalities"
 # EEG Signal Analysis Module:
 The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that provides advanced processing, visualization, and AI-powered interpretation of electroencephalography (EEG) signals. This page is responsible for classifying between five classes (Dementia, Alzheimer's, Schizophrenia, Epilepsy, and Healthy) using a pre-trained simplified EEGNet model.
 
