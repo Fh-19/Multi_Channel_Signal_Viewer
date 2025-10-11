@@ -3,6 +3,8 @@ The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that
 
 <img width="1919" height="977" alt="Image" src="https://github.com/user-attachments/assets/9ce1d555-1aef-4b19-9be9-36c1d2789793" />
 
+**Any details about the trained model can be found in the notebook `final_eeg_model.ipynb`**
+
 ## Backend API Endpoints:
 `POST /upload`
 - Purpose: uploads and validates EEG files
@@ -103,6 +105,8 @@ The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that
 
   # Doppler Shift Analysis Module
 The Doppler Shift Simulator is a sophisticated web application that demonstrates and analyzes the Doppler effect, a phenomenon where the frequency of a wave changes for an observer moving relative to the wave source. This module provides both simulation and analysis capabilities for Doppler shift phenomena, with a focus on realistic vehicle pass-by scenarios.
+
+**Any details about the trained model can be found in the notebook `doppler_model.ipynb`**
 
 ## Physics Principle:
      `f_observed = f_source × (v_sound / (v_sound ± v_relative))`
