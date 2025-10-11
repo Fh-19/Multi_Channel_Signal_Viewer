@@ -1,3 +1,93 @@
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+# Multi-Channel Signal Viewer:
+## Project Overview
+This project provides an integrated platform for handling 1D medical and non-medical signals. It performs advanced digital signal processing, offers multi-modal visualization tools, and integrates AI-driven classification models for intelligent inference and analysis.
+- Medical Signals: Electrocardiography (ECG) and Electroencephalography (EEG) signals, with tools for preprocessing, visualization, and deep learning-based classification.
+- Non-medical Signals: Acoustic and radar-related signals including drone sound detection, Doppler signal generation and classification, and SAR (Synthetic Aperture Radar) signal visualization.
+
+**To run our website:**
+- Navigate to the project directory and run:
+`concurrently "uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000" "cd frontend && npm run dev"`
+#  Drone vs Noise Audio Classification System
+
+This project is an  detecting whether an input audio file represents a **Drone** or **Noise**.  
+It combines **MFCC-based audio feature extraction**, a **PyTorch neural network**, a **FastAPI backend**, and a **React frontend** for real-time interaction.
+
+---
+
+##  Overview
+
+### 🔹 Objective
+To build a deep learning pipeline that can classify audio files into two categories:
+- **Drone**
+- **Noise**
+
+## core technologies
+feature Extraction
+Model training
+API backend
+User interface
+
+---
+
+## 🧩 Project Workflow
+
+### 1️ Feature Extraction (`mfcc.py`)
+
+This stage converts raw `.wav` audio files into numerical MFCC (Mel-Frequency Cepstral Coefficient) features.
+
+#### 🔹 Process:
+1. Load `.wav` files from `data_fixed/train/`.
+2. Compute **40 MFCC coefficients** per file using `librosa`.
+3. Take the mean of all MFCC frames to produce a fixed 40-dimensional vector.
+4. Save the features and labels into `.npy` files.
+
+### 2 model training ('model.py')
+his script defines and trains a fully connected neural network that classifies MFCC features as either Drone or Noise.
+
+### 3 backend API ('backend/router/api.py)
+The backend provides endpoints to upload an audio file, extract features, and make predictions using the trained model.
+
+ Components:
+
+Model Loader — loads model.pth weights.
+
+Feature Extractor — same MFCC logic used in training.
+
+Prediction Endpoint — takes an uploaded .wav file, runs inference, and returns label + confidence.
+
+### frontend ('ApiPage.jsx)
+The React-based frontend allows users to upload an audio file and view the prediction in real time.
+
+ Features:
+
+Upload .wav files
+
+Send audio to backend using fetch()
+
+Display predicted label and confidence
+
+Audio playback (Play / Pause)
+
+ Example User Flow:
+
+Select .wav file → Click Upload & Predict
+
+FastAPI backend analyzes and responds with a label + confidence
+
+The result appears on screen and user can play the sound
+
+ Example UI Sections:
+
+Left Panel: Audio upload & playback
+
+Right Panel: Prediction result display
+
+>>>>>>> fe765b4bf87034e0b40061ecb9e3e30a3d0f2eb3
+>>>>>>> d317721b761801f45eb308885dc9e5f5190fc0c4
 # ECG Signal Analysis Module:
 THE ECG Sigal Analysis Module provides advanced processing, visualization, and AI-powered interpretation of Electrocardiography (ECG) signals. This page integrates a two-stage classifier. The first classifier is a multiclass classifier identifying six cardiac abnormalities in ECG signals, the second is a finetuned binary classifier that is activated if the first classifier detected none of the six abnormalities in the ECG record. The binary classifier identifies if the ECG signal is a normal ECG or if there are other cardiac abnormalities.
 ## Backend API Endpoints:
@@ -194,10 +284,17 @@ To build a deep learning pipeline that can classify audio files into two categor
 - **Noise**
 
 ## core technologies
+<<<<<<< HEAD
 -feature Extraction
 -Model training
 -API backend
 -User interface
+=======
+**feature Extraction**
+**Model training**
+**API backend**
+**User interface**
+>>>>>>> d317721b761801f45eb308885dc9e5f5190fc0c4
 
 ---
 
@@ -247,11 +344,14 @@ Example User Flow:
 
 -Left Panel: Audio upload & playback
 -Right Panel: Prediction result display
+<<<<<<< HEAD
 
 # SAR Land Classification System
 
 This project performs land classification using **Sentinel-1 SAR images**.It classifies regions into Urban, Vegetation, or Water using VV and VH polarization bands.
 The system combines SAR image preprocessing, K-Means clustering, a FastAPI backend, and a React frontend for interactive visualization.
+=======
+>>>>>>> d317721b761801f45eb308885dc9e5f5190fc0c4
 
 
  ## Overview
