@@ -409,6 +409,8 @@ Example User Flow:
 -Result appears on the frontend with color-coded land types.
 
 UI Layout:
+<img width="1901" height="1011" alt="Screenshot 2025-10-11 234903" src="https://github.com/user-attachments/assets/18e3cefb-cb6a-4894-a91f-cdc210609381" />
+
 
 -Left Panel: File upload & classification result display.
 -Right Panel: Instructions, color legend, and additional info.
@@ -495,6 +497,8 @@ Features:
 -Can be integrated into a larger dashboard or application.
 
 UI Layout:
+
+<img width="1906" height="1017" alt="Screenshot 2025-10-11 235052" src="https://github.com/user-attachments/assets/e92a64f1-42f1-4e47-8c6f-4d9726d7645b" />
 
 -Centered Card: holds the map and descriptive text.
 -Iframe Container: ensures map fills available space.
