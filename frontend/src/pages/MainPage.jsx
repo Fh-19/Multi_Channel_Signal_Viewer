@@ -16,6 +16,8 @@ function MainPage() {
           <Link to="/api" style={styles.button}>Drone Detection</Link>
           <Link to="/map" style={styles.button}>Sentinel Map</Link>
           <Link to="/doppler" style={styles.button}>Doppler Shift</Link>
+          <Link to="/sar" style={styles.button}>SAR Classifier</Link>
+
         </div>
       </div>
     </div>
