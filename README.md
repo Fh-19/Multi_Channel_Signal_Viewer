@@ -166,6 +166,7 @@ The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that
 - Adjustable Window: Configurable time window (1-60 seconds)
 - Playback Controls: Play/pause with speed adjustment (0.25x-4x)
 - Channel Selection: Interactive toggle for up to 5 channels
+- Zoom in/out
 <img width="1254" height="831" alt="Image" src="https://github.com/user-attachments/assets/4c38d7be-77a4-4207-b728-6f3b82be61d0" />
 <img width="1281" height="782" alt="Image" src="https://github.com/user-attachments/assets/fac48173-7603-4033-adc4-f3a01256b2b7" />
 
