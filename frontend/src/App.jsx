@@ -5,6 +5,7 @@ import EEGPage from "./pages/EEGPage.jsx";
 import ApiPage from "./pages/ApiPage.jsx";
 import SentinelMap from "./pages/SentinelMap.jsx";
 import DopplerPage from "./pages/DopplerPage.jsx";
+import SARPage from "./pages/SARPage.jsx";
 
 function App() {
   return (
@@ -40,6 +41,7 @@ function App() {
             <Route path="/api" element={<ApiPage />} />
             <Route path="/map" element={<SentinelMap />} />
             <Route path="/doppler" element={<DopplerPage />} />
+            <Route path="/sar" element={<SARPage />} />
           </Routes>
         </div>
       </div>

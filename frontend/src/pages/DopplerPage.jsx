@@ -1,8 +1,5 @@
 import React, { useState } from "react";
 import Plot from "react-plotly.js";
-
-import axios from "axios";
-
 import {
   generateDoppler,
   playDoppler,
@@ -21,35 +18,11 @@ export default function DopplerPage() {
   const [error, setError] = useState(null);
   const [waveform, setWaveform] = useState(null); // store waveform data for plotting
 
-
-  const BACKEND_URL = "http://127.0.0.1:5000"; // 🔹 غيّريها لو السيرفر بتاعك شغال على port تاني
-
-  // --- Generate Doppler WAV ---
-  const handleGenerate = async () => {
-
   // 📡 Handle simulation playback
   const handlePlay = async () => {
     setError(null);
     setPlaying(true);
     try {
-
-      const response = await axios.post(
-        `${BACKEND_URL}/generate_doppler`,
-        { frequency, speed },
-        { responseType: "blob" } // علشان يرجع ملف WAV
-      );
-
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `doppler_${frequency}Hz_${speed}mps.wav`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } catch (err) {
-      setError("Error generating Doppler WAV file.");
-      console.error(err);
-
       await playDoppler(frequency, speed, realisticMode);
       setTimeout(() => setPlaying(false), 8000);
     } catch (err) {
@@ -59,7 +32,6 @@ export default function DopplerPage() {
           "Failed to play Doppler signal"
       );
       setPlaying(false);
-
     }
   };
 
@@ -98,19 +70,6 @@ export default function DopplerPage() {
 
     setLoading(true);
     try {
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await axios.post(`${BACKEND_URL}/analyze_doppler`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      setAnalysisResult(response.data);
-    } catch (err) {
-      console.error(err);
-      setError("Error analyzing file. Make sure backend is running.");
-
       const result = await uploadDopplerFile(file);
       setUploadStatus(result);
       setUploadStatus({ ...result, filename: file.name });
