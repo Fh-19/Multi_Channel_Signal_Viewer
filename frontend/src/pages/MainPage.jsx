@@ -4,7 +4,11 @@ function MainPage() {
   return (
     <div style={styles.pageContainer}>
       <div style={styles.card}>
+
+        <h1 style={styles.title}>Welcome to our signal viewer</h1>
+
         <h1 style={styles.title}>Multi-Channel Signal Viewer</h1>
+
         <p style={styles.subtitle}>Select a page to explore your data:</p>
         <div style={styles.buttons}>
           <Link to="/ecg" style={styles.button}>ECG</Link>
@@ -12,6 +16,8 @@ function MainPage() {
           <Link to="/api" style={styles.button}>Drone Detection</Link>
           <Link to="/map" style={styles.button}>Sentinel Map</Link>
           <Link to="/doppler" style={styles.button}>Doppler Shift</Link>
+          <Link to="/sar" style={styles.button}>SAR Classifier</Link>
+
         </div>
       </div>
     </div>
