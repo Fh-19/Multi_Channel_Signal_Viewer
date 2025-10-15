@@ -1,16 +1,16 @@
 import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 import MainPage from "./pages/MainPage.jsx";
 import ECGPage from "./pages/ECGPage.jsx";
-import EEGPage from "./pages/EEGPage.jsx";
+import EEGPage from "./pages/EEG/EEGPage.jsx";
 import ApiPage from "./pages/ApiPage.jsx";
 import SentinelMap from "./pages/SentinelMap.jsx";
-import DopplerPage from "./pages/DopplerPage.jsx";
+import DopplerPage from "./pages/Doppler/DopplerPage.jsx";
 
 function App() {
   return (
     <Router>
       <div style={styles.app}>
-        {/* ✅ Home Button (top-left, not overlapping content) */}
+        {/* Home Button (top-left, not overlapping content) */}
         <Link to="/" style={styles.homeButton}>
           {/* Inline SVG home icon */}
           <svg
