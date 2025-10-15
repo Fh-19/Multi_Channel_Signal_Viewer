@@ -7,7 +7,7 @@ import numpy as np
 import os
 from typing import Optional
 import tempfile, os, soundfile as sf
-from backend.pretrained_models.doppler_shift import DopplerShift
+from backend.services.doppler_processing import DopplerShift
 from backend.pretrained_models.doppler_predict import predict_doppler
 
 router = APIRouter(tags=["Doppler"])
