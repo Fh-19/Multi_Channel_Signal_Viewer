@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 import MainPage from "./pages/MainPage.jsx";
-import ECGPage from "./pages/ECGPage.jsx";
+//import ECGPage from "./pages/ECGPage.jsx";
+import ECGPage from "./pages/ECG/ECGPage.jsx";
 import EEGPage from "./pages/EEG/EEGPage.jsx";
 import ApiPage from "./pages/ApiPage.jsx";
 import SentinelMap from "./pages/SentinelMap.jsx";
