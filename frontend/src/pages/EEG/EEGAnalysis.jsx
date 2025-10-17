@@ -1,13 +1,13 @@
-import { useMemo, useEffect } from "react"; // ADD: Import useEffect
+import { useMemo, useEffect } from "react";
 import Plot from "react-plotly.js";
 import { predictEegFile } from "../../services/eegService";
 
-const colorPalette = {
-  Alzheimer: "#FF6B6B",
-  Dementia: "#FFD93D",
-  Epilepsy: "#6BCB77",
-  Healthy: "#4D96FF",
-  Schizophrenia: "#845EC2",
+const DISEASE_COLORS = {
+  "Alzheimer": "#E24A33",
+  "Dementia": "#348ABD", 
+  "Epilepsy": "#988ED5",
+  "Healthy": "#8EBA42",
+  "Schizophrenia": "#FBC15E"
 };
 
 export default function EEGAnalysis({
@@ -27,7 +27,9 @@ export default function EEGAnalysis({
   setBandPowers,
   bandPowerChannel,
   setBandPowerChannel,
-  isLoading
+  isLoading,
+  experimentalFs,
+  isPlaying
 }) {
   // Compute EEG bands
   const bandData = useMemo(() => {
@@ -81,22 +83,26 @@ export default function EEGAnalysis({
     return relative;
   }, [buffer, channels, fs, time, bandPowerChannel]);
 
-  // FIXED: Update band powers using useEffect instead of useMemo
+  // Update band powers using useEffect
   useEffect(() => {
     if (bandData) {
       setBandPowers(bandData);
     }
   }, [bandData, setBandPowers]);
 
-  // Predict handler
+  // Predict handler - uses experimentalFs
   const handlePredict = async () => {
-    if (!uploadedFile) return;
+    if (!uploadedFile) {
+      alert("Please upload an EEG file first.");
+      return;
+    }
+    
     setIsPredicting(true);
     setPrediction(null);
     setPredictionProbs(null);
 
     try {
-      const res = await predictEegFile(uploadedFile);
+      const res = await predictEegFile(uploadedFile, experimentalFs);
       if (res.probabilities && Object.keys(res.probabilities).length > 0) {
         setPrediction(res.prediction || "Unknown");
         setPredictionProbs(res.probabilities);
@@ -113,6 +119,44 @@ export default function EEGAnalysis({
     }
   };
 
+  const classificationBarChart = useMemo(() => {
+    if (!predictionProbs) return null;
+
+    const diseases = Object.keys(predictionProbs);
+    const values = diseases.map((d) => predictionProbs[d] * 100);
+
+    return (
+      <Plot
+        data={[
+          {
+            x: values,
+            y: diseases,
+            type: "bar",
+            orientation: "h",
+            marker: {
+              color: diseases.map(d => DISEASE_COLORS[d] || "#3498db"),
+              line: { color: "#2c3e50", width: 1 },
+            },
+            text: values.map(v => v.toFixed(1) + "%"),
+            textposition: "auto",
+          },
+        ]}
+        layout={{
+          width: 420,
+          height: diseases.length * 40 + 100,
+          margin: { l: 150, r: 20, t: 20, b: 40 },
+          xaxis: { title: "Probability (%)", range: [0, 100] },
+          yaxis: { 
+            tickvals: diseases,
+            ticktext: diseases
+          },
+          showlegend: false,
+        }}
+        config={{ displayModeBar: false }}
+      />
+    );
+  }, [predictionProbs]);
+
   return (
     <div style={{
       flex: 3,
@@ -123,9 +167,9 @@ export default function EEGAnalysis({
       width: "100%",
       opacity: isLoading ? 0.5 : 1
     }}>
-      <h2 style={{ marginTop: 0, marginBottom: 12, color: "#263357" }}>Prediction + Band Powers</h2>
+      <h2 style={{ marginTop: 0, marginBottom: 12, color: "#263357" }}>EEG Analysis</h2>
 
-      {/* Prediction */}
+      {/* Prediction Section */}
       <div style={{ marginTop: 25 }}>
         <button
           onClick={handlePredict}
@@ -135,10 +179,11 @@ export default function EEGAnalysis({
             color: "white",
             border: "none",
             borderRadius: 6,
-            padding: "6px 12px",
+            padding: "10px 18px",
             fontWeight: 600,
             cursor: (isPredicting || isLoading || !uploadedFile) ? "not-allowed" : "pointer",
-            marginBottom: 10,
+            marginBottom: 15,
+            width: "100%"
           }}
         >
           {isPredicting ? "Predicting..." : (isLoading ? "Loading Data..." : "Predict Disease")}
@@ -158,57 +203,67 @@ export default function EEGAnalysis({
           </div>
         ) : predictionProbs ? (
           <>
-            <div style={{ fontSize: 15, marginBottom: 8 }}>
-              Predicted:{" "}
-              <strong style={{ color: colorPalette[prediction] || "#2055c0" }}>
+            <div style={{
+              padding: "10px",
+              backgroundColor: "#e8f5e8",
+              borderRadius: "5px",
+              marginBottom: "15px"
+            }}>
+              <h4 style={{ margin: "0 0 8px 0", color: "#263357" }}>Prediction Result</h4>
+              <p style={{ 
+                fontSize: "16px", 
+                fontWeight: "bold", 
+                color: DISEASE_COLORS[prediction] || "#2055c0", 
+                margin: 0 
+              }}>
                 {prediction}
-              </strong>
+              </p>
             </div>
 
-            <Plot
-              data={[
-                {
-                  type: "bar",
-                  x: Object.values(predictionProbs),
-                  y: Object.keys(predictionProbs),
-                  orientation: "h",
-                  marker: {
-                    color: Object.keys(predictionProbs).map(
-                      (cls) => colorPalette[cls] || "#2055c0"
-                    ),
-                  },
-                  text: Object.values(predictionProbs).map(
-                    (v) => (v * 100).toFixed(1) + "%"
-                  ),
-                  textposition: "auto",
-                },
-              ]}
-              layout={{
-                height: 250,
-                margin: { t: 20, l: 120, r: 30, b: 40 },
-                xaxis: { title: "Probability", range: [0, 1] },
-                yaxis: { automargin: true },
-                title: `Prediction Probabilities`,
-              }}
-              config={{ displayModeBar: false, responsive: true }}
-              style={{ width: "100%" }}
-            />
+            <div style={{ textAlign: "center" }}>
+              <h4 style={{ color: "#263357", marginBottom: 10 }}>Class Probabilities</h4>
+              {classificationBarChart}
+            </div>
           </>
         ) : prediction ? (
-          <div style={{ fontWeight: 700, color: "#2055c0" }}>
-            Predicted: {prediction}
+          <div style={{
+            padding: "10px",
+            backgroundColor: "#e8f5e8",
+            borderRadius: "5px",
+            marginBottom: "15px"
+          }}>
+            <h4 style={{ margin: "0 0 8px 0", color: "#263357" }}>Prediction Result</h4>
+            <p style={{ 
+              fontSize: "16px", 
+              fontWeight: "bold", 
+              color: DISEASE_COLORS[prediction] || "#2055c0", 
+              margin: 0 
+            }}>
+              {prediction}
+            </p>
           </div>
         ) : (
-          <div style={{ color: "#8d97b6" }}>No prediction yet.</div>
+          <div style={{ 
+            textAlign: "center", 
+            color: "#8d97b6",
+            padding: "20px",
+            backgroundColor: "#f9f9f9",
+            borderRadius: "6px"
+          }}>
+            <p>Click "Predict Disease" to see classification results</p>
+            <p style={{ fontSize: "12px", marginTop: "10px" }}>
+              Load an EEG file first, then click the Predict Disease button to get disease classification predictions.
+            </p>
+          </div>
         )}
       </div>
 
       {/* Band Power Chart */}
-      <div style={{ marginTop: 25 }}>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>EEG Band Powers</div>
+      <div style={{ marginTop: 25, paddingTop: 15, borderTop: "1px solid #eee" }}>
+        <h4 style={{ color: "#263357", marginBottom: 10 }}>EEG Band Powers</h4>
         
         <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, opacity: isLoading ? 0.7 : 1 }}>
+          <label style={{ fontSize: 14, fontWeight: 600, opacity: isLoading ? 0.7 : 1 }}>
             Channel:
             <select
               value={bandPowerChannel || ""}
@@ -216,8 +271,9 @@ export default function EEGAnalysis({
               disabled={isLoading}
               style={{ 
                 marginLeft: 8, 
-                padding: "4px 8px", 
-                borderRadius: 4, 
+                padding: "6px 10px", 
+                borderRadius: "4px",
+                border: "1px solid #ddd",
                 fontSize: 13,
                 opacity: isLoading ? 0.7 : 1 
               }}
@@ -249,23 +305,53 @@ export default function EEGAnalysis({
                 type: "bar",
                 x: Object.keys(bandPowers),
                 y: Object.values(bandPowers),
-                marker: { color: ["#4D96FF", "#6BCB77", "#FFD93D", "#FF6B6B", "#845EC2"] },
+                marker: { 
+                  color: [ "#E24A33",
+                  "#348ABD", 
+                  "#988ED5",
+                  "#8EBA42",
+                  "#FBC15E"],
+                  line: { color: "#2c3e50", width: 1 }
+                },
                 text: Object.values(bandPowers).map(v => v.toFixed(1) + "%"),
                 textposition: "auto",
               },
             ]}
             layout={{
-              height: 250,
-              margin: { t: 20, l: 40, r: 20, b: 40 },
+              height: 300,
+              margin: { t: 20, l: 60, r: 20, b: 60 },
+              xaxis: { title: "Frequency Band" },
               yaxis: { title: "Relative Power (%)", range: [0, 100] },
-              title: `Channel: ${bandPowerChannel || channels[0] || "-"}`,
+              showlegend: false,
             }}
             config={{ displayModeBar: false, responsive: true }}
             style={{ width: "100%" }}
           />
         ) : (
-          <div style={{ color: "#8d97b6" }}>Band power chart waiting for data...</div>
+          <div style={{ 
+            textAlign: "center", 
+            color: "#8d97b6",
+            padding: "20px",
+            backgroundColor: "#f9f9f9",
+            borderRadius: "6px"
+          }}>
+            Band power chart waiting for EEG data...
+          </div>
         )}
+      </div>
+
+      {/* Recording Information */}
+      <div style={{ marginTop: 25, paddingTop: 15, borderTop: "1px solid #eee" }}>
+        <h4 style={{ color: "#263357", marginBottom: 10 }}>Recording Information</h4>
+        <div style={{ fontSize: "14px", color: "#555" }}>
+          <p><strong>Sampling Rate:</strong> {experimentalFs} Hz</p>
+          <p><strong>Selected Channels:</strong> {channels.join(", ")}</p>
+          <p><strong>Window Size:</strong> {windowSeconds} seconds</p>
+          <p><strong>Status:</strong> {isPlaying ? 
+            <span style={{ color: "#2ecc71", fontWeight: "bold" }}>Playing</span> : 
+            <span style={{ color: "#e74c3c", fontWeight: "bold" }}>Paused</span>}
+          </p>
+        </div>
       </div>
     </div>
   );

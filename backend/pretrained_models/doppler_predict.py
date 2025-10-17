@@ -1,4 +1,5 @@
 # backend/pretrained_models/doppler_predict.py
+
 import torch
 import torch.nn as nn
 import librosa
@@ -61,27 +62,36 @@ target_mean = checkpoint["target_mean"]
 target_std = checkpoint["target_std"]
 
 # -------------------------------
-# Prediction function
+# Updated prediction function with flexible sampling rate support
 # -------------------------------
-def predict_doppler(file_path: str):
-    y, sr = librosa.load(file_path, sr=22050)
+def predict_doppler(file_path: str, target_sr: int = 22050):
+    """
+    Predict speed and frequency from Doppler audio file
+    target_sr: target sample rate for processing (accepts any value between 8000-48000)
+    """
+    try:
+        # Load audio with specified target sample rate - librosa will handle any valid rate
+        y, sr = librosa.load(file_path, sr=target_sr)
 
-    # compute mel spectrogram
-    mel = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=n_mels)
-    mel_db = librosa.power_to_db(mel, ref=np.max)
-    mel_db = (mel_db - mel_db.min()) / (mel_db.max() - mel_db.min() + 1e-9)
+        # Compute mel spectrogram
+        mel = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=n_mels)
+        mel_db = librosa.power_to_db(mel, ref=np.max)
+        mel_db = (mel_db - mel_db.min()) / (mel_db.max() - mel_db.min() + 1e-9)
 
-    # pad/trim
-    if mel_db.shape[1] < max_frames:
-        pad = max_frames - mel_db.shape[1]
-        mel_db = np.pad(mel_db, ((0, 0), (0, pad)), mode="constant", constant_values=0.0)
-    else:
-        mel_db = mel_db[:, :max_frames]
+        # Pad/trim
+        if mel_db.shape[1] < max_frames:
+            pad = max_frames - mel_db.shape[1]
+            mel_db = np.pad(mel_db, ((0, 0), (0, pad)), mode="constant", constant_values=0.0)
+        else:
+            mel_db = mel_db[:, :max_frames]
 
-    mel_tensor = torch.tensor(mel_db, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
-    with torch.no_grad():
-        pred_norm = model(mel_tensor).cpu().numpy().squeeze()
+        mel_tensor = torch.tensor(mel_db, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
+        with torch.no_grad():
+            pred_norm = model(mel_tensor).cpu().numpy().squeeze()
 
-    pred = pred_norm * target_std + target_mean
-    speed_pred, freq_pred = pred.tolist()
-    return {"pred_speed_kmh": float(speed_pred), "pred_freq_hz": float(freq_pred)}
+        pred = pred_norm * target_std + target_mean
+        speed_pred, freq_pred = pred.tolist()
+        return {"pred_speed_kmh": float(speed_pred), "pred_freq_hz": float(freq_pred)}
+    
+    except Exception as e:
+        raise Exception(f"Error in prediction with sample rate {target_sr}: {str(e)}")

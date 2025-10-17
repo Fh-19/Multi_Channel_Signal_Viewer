@@ -10,6 +10,8 @@ export default function DopplerControls({
   setFrequency,
   speed,
   setSpeed,
+  samplingRate,
+  setSamplingRate,
   playing,
   setPlaying,
   setError,
@@ -19,7 +21,7 @@ export default function DopplerControls({
     setError(null);
     setPlaying(true);
     try {
-      await playDoppler(frequency, speed, realisticMode);
+      await playDoppler(frequency, speed, realisticMode, samplingRate);
       setTimeout(() => setPlaying(false), 8000);
     } catch (err) {
       setError(
@@ -35,12 +37,12 @@ export default function DopplerControls({
   const handleGenerate = async () => {
     setError(null);
     try {
-      const blob = await generateDoppler(frequency, speed, realisticMode);
+      const blob = await generateDoppler(frequency, speed, realisticMode, samplingRate);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       const mode = realisticMode ? "realistic" : "basic";
-      a.download = `doppler_${mode}_${frequency}Hz_${speed}kmh.wav`;
+      a.download = `doppler_${mode}_${frequency}Hz_${speed}kmh_${samplingRate}Hz.wav`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -53,6 +55,9 @@ export default function DopplerControls({
       );
     }
   };
+
+  // Common sample rate presets for quick selection
+  const commonRates = [1600 , 2500 , 8000, 16000, 22050, 32000, 44100];
 
   return (
     <>
@@ -84,6 +89,74 @@ export default function DopplerControls({
             />
             Basic Doppler Tone
           </label>
+        </div>
+      </div>
+
+      {/* UPDATED: Continuous Sampling Rate Control */}
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: 16,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          marginBottom: 20,
+        }}
+      >
+        <h3 style={{ color: "#2055c0", marginBottom: 10 }}>Sampling Frequency</h3>
+        <div style={{ marginBottom: 10 }}>
+          <label>
+            Sample Rate: <strong>{samplingRate} Hz</strong>
+            <input
+              type="range"
+              min="1600"
+              max="44100"
+              step="100"  // Changed to 100Hz steps for smooth control
+              value={samplingRate}
+              onChange={(e) => setSamplingRate(Number(e.target.value))}
+              style={{
+                width: "100%",
+                marginTop: 8,
+              }}
+            />
+          </label>
+          <div style={{ 
+            display: "flex", 
+            justifyContent: "space-between", 
+            fontSize: "16px",
+            color: "#666",
+            marginTop: 4
+          }}>
+            <span>1.6kHz</span>
+            <span>8kHz</span>
+            <span>16kHz</span>
+            <span>24kHz</span>
+            <span>32kHz</span>
+            <span>44.1kHz</span>
+          </div>
+          
+          {/* Quick selection buttons for common rates */}
+          <div style={{ marginTop: 12 }}>
+            <p style={{ fontSize: "12px", color: "#666", marginBottom: 8 }}>Quick select:</p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {commonRates.map(rate => (
+                <button
+                  key={rate}
+                  onClick={() => setSamplingRate(rate)}
+                  style={{
+                    background: samplingRate === rate ? "#2055c0" : "#f0f4f8",
+                    color: samplingRate === rate ? "#fff" : "#333",
+                    border: "1px solid #ccc",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                  }}
+                >
+                  {rate/1000}kHz
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
