@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import Plot from "react-plotly.js";
-import { classifyEcgRecord } from "../../services/ecgService";
+import { classifyWithSampling } from "../../services/ecgService";
 
 const DISEASE_COLORS = {
   "1dAVb": "#E24A33",
@@ -25,49 +25,51 @@ export default function ECGAnalysis({
   isLoading,
   setPrediction,
   setPredictionProbs,
-  setIsPredicting
+  setIsPredicting,
+  displayFs
 }) {
   // Handle prediction with proper error handling and results
-  const handlePredict = async () => {
-    if (!filename) {
-      alert("Please upload an ECG file first.");
-      return;
-    }
-    
-    setIsPredicting(true);
-    setPrediction(null);
-    setPredictionProbs(null);
+const handlePredict = async () => {
+  if (!filename) {
+    alert("Please upload an ECG file first.");
+    return;
+  }
+  
+  setIsPredicting(true);
+  setPrediction(null);
+  setPredictionProbs(null);
 
-    try {
-      const result = await classifyEcgRecord(filename, "");
+  try {
+    // Pass the actual sampling rate (fs) instead of empty string
+    const result = await classifyWithSampling(filename, displayFs);
+    
+    // Set prediction results based on the actual API response structure
+    if (result && result.prediction) {
+      setPrediction(result.prediction);
       
-      // Set prediction results based on the actual API response structure
-      if (result && result.prediction) {
-        setPrediction(result.prediction);
-        
-        // Set probabilities if available
-        if (result.probabilities && Object.keys(result.probabilities).length > 0) {
-          setPredictionProbs(result.probabilities);
-        }
-      } else if (result && result.label) {
-        // Handle case where response uses 'label' instead of 'prediction'
-        setPrediction(result.label);
-        if (result.probabilities) {
-          setPredictionProbs(result.probabilities);
-        }
-      } else {
-        // Fallback for unexpected response format
-        setPrediction("Unknown");
-        console.warn("Unexpected API response format:", result);
+      // Set probabilities if available
+      if (result.probabilities && Object.keys(result.probabilities).length > 0) {
+        setPredictionProbs(result.probabilities);
       }
-    } catch (err) {
-      console.error("Prediction failed:", err);
-      setPrediction("Prediction error");
-      setPredictionProbs(null);
-    } finally {
-      setIsPredicting(false);
+    } else if (result && result.label) {
+      // Handle case where response uses 'label' instead of 'prediction'
+      setPrediction(result.label);
+      if (result.probabilities) {
+        setPredictionProbs(result.probabilities);
+      }
+    } else {
+      // Fallback for unexpected response format
+      setPrediction("Unknown");
+      console.warn("Unexpected API response format:", result);
     }
-  };
+  } catch (err) {
+    console.error("Prediction failed:", err);
+    setPrediction("Prediction error");
+    setPredictionProbs(null);
+  } finally {
+    setIsPredicting(false);
+  }
+};
 
   const classificationBarChart = useMemo(() => {
     if (!predictionProbs) return null;

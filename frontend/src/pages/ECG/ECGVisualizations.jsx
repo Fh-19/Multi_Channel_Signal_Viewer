@@ -50,7 +50,12 @@ export default function ECGVisualizations({
   scatterData,
   clearPolarTraces,
   clearRecurrenceMatrix,
-  resetXorChunks
+  resetXorChunks,
+  // NEW: Aliasing warning and FS info
+  aliasingWarning,
+  displayFs,
+  originalFs,
+  resamplingType
 }) {
   const renderSelectedVisualization = () => {
     switch (selectedVisualization) {
@@ -60,6 +65,8 @@ export default function ECGVisualizations({
             polarTraces={polarTraces}
             polarMode={polarMode}
             isLoading={isLoading}
+            aliasingWarning={aliasingWarning}
+            displayFs={displayFs}
           />
         );
       
@@ -73,6 +80,8 @@ export default function ECGVisualizations({
             leadNames={leadNames}
             isLoading={isLoading}
             scatterData={scatterData}
+            aliasingWarning={aliasingWarning}
+            displayFs={displayFs}
           />
         );
       
@@ -83,6 +92,8 @@ export default function ECGVisualizations({
             xorChannel={xorChannel}
             leadNames={leadNames}
             isLoading={isLoading}
+            aliasingWarning={aliasingWarning}
+            displayFs={displayFs}
           />
         );
       
@@ -104,15 +115,31 @@ export default function ECGVisualizations({
   return (
     <>
       {/* Signal Graphs - Always visible */}
-      <ECGSignalGraphs
-        signals={signals}
-        signalData={signalData}
-        leads={leads}
-        leadNames={leadNames}
-        fs={fs}
-        signalMode={signalMode}
-        isLoading={isLoading}
-      />
+      <div style={{ position: 'relative' }}>
+        <ECGSignalGraphs
+          signals={signals}
+          signalData={signalData}
+          leads={leads}
+          leadNames={leadNames}
+          fs={fs}
+          signalMode={signalMode}
+          isLoading={isLoading}
+        />
+        {/* NEW: FS Indicator */}
+        <div style={{ 
+          position: 'absolute', 
+          top: 10, 
+          right: 10, 
+          background: aliasingWarning ? '#ffebee' : '#e8f5e8',
+          padding: '5px 10px',
+          borderRadius: '4px',
+          fontSize: '12px',
+          border: aliasingWarning ? '1px solid #f44336' : '1px solid #4caf50',
+          zIndex: 10
+        }}>
+          {displayFs} Hz {aliasingWarning && '⚠️ Aliasing'}
+        </div>
+      </div>
 
       {/* Advanced Visualizations */}
       <div style={{ 
@@ -121,7 +148,7 @@ export default function ECGVisualizations({
         paddingTop: 20,
         opacity: isLoading ? 0.5 : 1 
       }}>
-        <h3 style={{ margin: "0 0 15px 0", color: "#263357" }}>Advanced Visualizations</h3>
+        <h1 style={{ margin: "0 0 18px 0", fontWeight: 700, fontSize: 26, color: "#263357" }}>Advanced Visualizations</h1>
         
         {/* Visualization Selector */}
         <div style={{ marginBottom: 20 }}>
