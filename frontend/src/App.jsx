@@ -7,6 +7,8 @@ import ApiPage from "./pages/ApiPage.jsx";
 import SentinelMap from "./pages/SentinelMap.jsx";
 import DopplerPage from "./pages/Doppler/DopplerPage.jsx";
 import SARPage from "./pages/SARPage.jsx";
+import VoiceGenderPage from "./pages/VoiceGenderPage.jsx";
+
 
 function App() {
   return (
@@ -43,6 +45,8 @@ function App() {
             <Route path="/map" element={<SentinelMap />} />
             <Route path="/doppler" element={<DopplerPage />} />
             <Route path="/sar" element={<SARPage />} />
+            <Route path="/voice-gender" element={<VoiceGenderPage />} />
+
           </Routes>
         </div>
       </div>
