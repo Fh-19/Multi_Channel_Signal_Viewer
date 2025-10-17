@@ -29,7 +29,7 @@ export default function EEGAnalysis({
   setBandPowerChannel,
   isLoading,
   experimentalFs,
-  isPlaying = false
+  isPlaying
 }) {
   // Compute EEG bands
   const bandData = useMemo(() => {
@@ -306,7 +306,7 @@ export default function EEGAnalysis({
                 x: Object.keys(bandPowers),
                 y: Object.values(bandPowers),
                 marker: { 
-                  color: [  "#E24A33",
+                  color: [ "#E24A33",
                   "#348ABD", 
                   "#988ED5",
                   "#8EBA42",
@@ -340,17 +340,16 @@ export default function EEGAnalysis({
         )}
       </div>
 
-      {/* Recording Information - MOVED TO BOTTOM */}
+      {/* Recording Information */}
       <div style={{ marginTop: 25, paddingTop: 15, borderTop: "1px solid #eee" }}>
         <h4 style={{ color: "#263357", marginBottom: 10 }}>Recording Information</h4>
         <div style={{ fontSize: "14px", color: "#555" }}>
           <p><strong>Sampling Rate:</strong> {experimentalFs} Hz</p>
           <p><strong>Selected Channels:</strong> {channels.join(", ")}</p>
           <p><strong>Window Size:</strong> {windowSeconds} seconds</p>
-          <p><strong>Status:</strong> 
-            <span style={{ color: "#e74c3c", fontWeight: "bold", marginLeft: "5px" }}>
-              Paused
-            </span>
+          <p><strong>Status:</strong> {isPlaying ? 
+            <span style={{ color: "#2ecc71", fontWeight: "bold" }}>Playing</span> : 
+            <span style={{ color: "#e74c3c", fontWeight: "bold" }}>Paused</span>}
           </p>
         </div>
       </div>

@@ -14,7 +14,7 @@ function EEGPage() {
   // segments / playback
   const [segments, setSegments] = useState([]);
   const [segmentTimes, setSegmentTimes] = useState([]);
-  const [fs, setFs] = useState(250);
+  const [fs, setFs] = useState(256);
   const [windowSeconds, setWindowSeconds] = useState(10);
 
   // prediction
@@ -27,7 +27,7 @@ function EEGPage() {
   const [time, setTime] = useState([]);
 
   // playback controls
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
 
   // advanced viz state
@@ -89,9 +89,9 @@ function EEGPage() {
       setFilename(meta.filename);
       setAllChannels(meta.channels || []);
       setChannels((meta.channels || []).slice(0, 3));
-      setFs(meta.sfreq || 250);
-      setOriginalFs(meta.sfreq || 250);
-      setExperimentalFs(meta.sfreq || 250);
+      setFs(meta.sfreq || 256);
+      setOriginalFs(meta.sfreq || 256);
+      setExperimentalFs(meta.sfreq || 256);
       setBandPowerChannel(null);
       setXorChannel(null);
 
@@ -496,4 +496,3 @@ function EEGPage() {
 }
 
 export default EEGPage;
-
