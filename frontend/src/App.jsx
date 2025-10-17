@@ -7,8 +7,11 @@ import ApiPage from "./pages/ApiPage.jsx";
 import SentinelMap from "./pages/SentinelMap.jsx";
 import DopplerPage from "./pages/Doppler/DopplerPage.jsx";
 import SARPage from "./pages/SARPage.jsx";
+<<<<<<< HEAD
 import VoiceGenderPage from "./pages/VoiceGenderPage.jsx";
 
+=======
+>>>>>>> 2e3da8c1693a8a92e50605ab57d160dc06bb9b1e
 
 function App() {
   return (
@@ -45,8 +48,11 @@ function App() {
             <Route path="/map" element={<SentinelMap />} />
             <Route path="/doppler" element={<DopplerPage />} />
             <Route path="/sar" element={<SARPage />} />
+<<<<<<< HEAD
             <Route path="/voice-gender" element={<VoiceGenderPage />} />
 
+=======
+>>>>>>> 2e3da8c1693a8a92e50605ab57d160dc06bb9b1e
           </Routes>
         </div>
       </div>

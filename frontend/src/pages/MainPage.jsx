@@ -15,8 +15,11 @@ function MainPage() {
           <Link to="/map" style={styles.button}>Sentinel Map</Link>
           <Link to="/doppler" style={styles.button}>Doppler Shift</Link>
           <Link to="/sar" style={styles.button}>SAR Classifier</Link>
+<<<<<<< HEAD
           <Link to="/voice-gender" style={styles.button}>Voice Gender Detection</Link>
 
+=======
+>>>>>>> 2e3da8c1693a8a92e50605ab57d160dc06bb9b1e
 
         </div>
       </div>
