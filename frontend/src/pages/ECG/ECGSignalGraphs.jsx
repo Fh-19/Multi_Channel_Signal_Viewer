@@ -12,8 +12,18 @@ export default function ECGSignalGraphs({
   leadNames,
   fs,
   signalMode,
-  isLoading
+  isLoading,
+  aliasingWarning,
+  displayFs
 }) {
+  console.log("ECGSignalGraphs rendering:", {
+    signalsLength: signals.length,
+    signalDataLength: signalData.length,
+    fs,
+    displayFs,
+    aliasingWarning
+  });
+
   if (isLoading) {
     return (
       <div style={{
@@ -38,30 +48,71 @@ export default function ECGSignalGraphs({
     );
   }
 
-  const signalTraces = leads.map((leadIdx, i) => ({
-    x: signalData,
-    y: signals.map((row) => (row ? row[leadIdx] : null)),
-    type: "scatter",
-    mode: "lines",
-    name: leadNames[leadIdx] || `Lead ${leadIdx + 1}`,
-    line: { width: 1.2, color: LEAD_COLORS[leadIdx] },
-  }));
+  const signalTraces = leads.map((leadIdx, i) => {
+    const yValues = signals.map((row) => (row ? row[leadIdx] : null));
+    
+    return {
+      x: signalData,
+      y: yValues,
+      type: "scatter",
+      mode: "lines",
+      name: leadNames[leadIdx] || `Lead ${leadIdx + 1}`,
+      line: { width: 1.2, color: LEAD_COLORS[leadIdx] },
+    };
+  });
+
+  const title = `ECG Signal (${signalMode === "cycle" ? "Cycle-by-cycle" : "Continuous"}) - ${displayFs} Hz${aliasingWarning ? ' ⚠️ Aliasing' : ''}`;
 
   return (
-    <div style={{ marginTop: 20, flex: 1, minHeight: "300px" }}>
+    <div style={{ marginTop: 20, flex: 1, minHeight: "300px", position: 'relative' }}>
       <Plot
         data={signalTraces}
         layout={{
           width: "100%",
-          height: "100%",
-          margin: { l: 50, r: 20, t: 40, b: 40 },
-          xaxis: { title: "Time (s)" },
-          yaxis: { title: "Amplitude (mV)", autorange: true },
+          height: 400,
+          margin: { l: 60, r: 30, t: 60, b: 50 },
+          xaxis: { 
+            title: "Time (s)",
+            gridcolor: '#f0f0f0',
+            showgrid: true
+          },
+          yaxis: { 
+            title: "Amplitude (mV)", 
+            autorange: true,
+            gridcolor: '#f0f0f0',
+            showgrid: true
+          },
           showlegend: true,
-          title: `ECG Signal (${signalMode === "cycle" ? "Cycle-by-cycle" : "Continuous"})`,
+          title: title,
+          plot_bgcolor: '#fafafa',
+          paper_bgcolor: '#fafafa',
         }}
-        config={{ displayModeBar: false }}
+        config={{ 
+          displayModeBar: true,
+          displaylogo: false,
+          modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+        }}
+        style={{ width: '100%', height: '100%' }}
       />
+      
+      {/* Signal Info Overlay */}
+      <div style={{
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        background: aliasingWarning ? 'rgba(255, 235, 238, 0.9)' : 'rgba(232, 245, 232, 0.9)',
+        padding: '8px 12px',
+        borderRadius: '6px',
+        fontSize: '12px',
+        border: aliasingWarning ? '1px solid #f44336' : '1px solid #4caf50',
+        zIndex: 10,
+        fontWeight: 'bold'
+      }}>
+        {displayFs} Hz {aliasingWarning && '⚠️ Aliasing'}
+        <div style={{ fontSize: '10px', marginTop: '4px', fontWeight: 'normal' }}>
+          {signals.length} samples
+        </div>
+      </div>
     </div>
   );
 }

@@ -22,6 +22,81 @@ def notch_filter(signal, fs, freq=50.0, quality=30):
     b, a = iirnotch(w0, quality)
     return filtfilt(b, a, signal)
 
+# NEW: Downsampling function with aliasing
+def downsample_signals(signals, original_fs, target_fs):
+    """
+    Downsample ECG signals using simple decimation.
+    
+    When target_fs < original_fs: Causes ALIASING
+    When target_fs = original_fs: No change
+    When target_fs > original_fs: Not allowed here (use upsample_signals)
+    
+    Aliasing occurs because frequencies above (target_fs/2) cannot be
+    represented and instead appear as lower frequencies.
+    """
+    if target_fs > original_fs:
+        raise ValueError(f"Cannot downsample to higher frequency: {original_fs} Hz → {target_fs} Hz")
+    
+    if target_fs == original_fs:
+        return signals
+    
+    # Calculate downsampling ratio
+    ratio = original_fs / target_fs
+    
+    # Simple decimation - this is what causes aliasing!
+    # We're not using anti-aliasing filters, so high frequencies fold back
+    downsampled_indices = np.arange(0, len(signals), ratio, dtype=int)
+    downsampled_signals = signals[downsampled_indices]
+    
+    return downsampled_signals
+
+# NEW: Upsampling function with interpolation
+def upsample_signals(signals, original_fs, target_fs):
+    """
+    Upsample ECG signals using interpolation.
+    
+    When target_fs > original_fs: Creates smoother signal
+    When target_fs = original_fs: No change
+    When target_fs < original_fs: Not allowed here (use downsample_signals)
+    
+    Note: Upsampling cannot create new information - it just makes
+    the existing signal smoother by interpolating between points.
+    """
+    if target_fs < original_fs:
+        raise ValueError(f"Cannot upsample to lower frequency: {original_fs} Hz → {target_fs} Hz")
+    
+    if target_fs == original_fs:
+        return signals
+    
+    # Calculate upsampling ratio
+    ratio = target_fs / original_fs
+    
+    # Use scipy's resample function for proper interpolation
+    num_samples = int(len(signals) * ratio)
+    upsampled_signals = resample(signals, num_samples, axis=0)
+    
+    return upsampled_signals
+
+# NEW: Universal resampling function
+def resample_signals(signals, original_fs, target_fs):
+    """
+    Universal resampling function - handles both upsampling and downsampling.
+    
+    Parameters:
+    - signals: numpy array of ECG data
+    - original_fs: current sampling frequency
+    - target_fs: desired sampling frequency
+    
+    Returns:
+    - resampled_signals: signals at target_fs
+    """
+    if target_fs == original_fs:
+        return signals
+    elif target_fs < original_fs:
+        return downsample_signals(signals, original_fs, target_fs)
+    else:  # target_fs > original_fs
+        return upsample_signals(signals, original_fs, target_fs)
+
 # existing helper used by websocket endpoint (kept)
 def load_ecg_record(record_number: str):
     """
@@ -116,7 +191,6 @@ def get_r_peaks_per_lead(signals, fs, leads=[0, 1, 2], min_rr_s=0.5):
         peaks_dict[int(lead)] = final_peaks
     
     return peaks_dict
-
 
 def extract_cycles(signals, r_peaks_dict, selected_leads=[0, 1, 2]):
     """

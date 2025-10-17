@@ -1,8 +1,7 @@
-# file: <your_router_file>.py
 import os
 import numpy as np
 from fastapi import APIRouter, HTTPException, Query, WebSocket, File, UploadFile
-from typing import List
+from typing import List, Optional
 import asyncio
 import wfdb
 from pydantic import BaseModel
@@ -20,7 +19,6 @@ MODEL_PATH = os.path.join(os.path.dirname(__file__), "../pretrained_models", MOD
 BINARY_MODEL_FILENAME = "ResNet_finetuned_binary2.h5"
 BINARY_MODEL_PATH = os.path.join(os.path.dirname(__file__), "../pretrained_models", BINARY_MODEL_FILENAME)
 
-
 # 6-class abnormalities (as in your test script)
 CLASSES = ["1dAVb", "RBBB", "LBBB", "SB", "AF", "ST"]
 
@@ -36,17 +34,19 @@ if not os.path.exists(BINARY_MODEL_PATH):
 
 binary_model = load_model(BINARY_MODEL_PATH, compile=False)
 
-
 class ClassifyRequest(BaseModel):
     record_number: str
     data_folder: str = "services/data"
+    target_fs: Optional[int] = None  # NEW: Allow target_fs in request body
 
+class ResampleRequest(BaseModel):
+    record_number: str
+    target_fs: int
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "../uploaded_data")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-
-# --- ECG data retrieval endpoint (unchanged) ---
+# --- ECG data retrieval endpoint (MODIFIED to include original_fs) ---
 @router.get("/ecg")
 def get_ecg(
     filename: str = Query(..., description="Uploaded ECG base name"),
@@ -61,10 +61,75 @@ def get_ecg(
     return {
         "signals": signals[:, leads].astype(float).tolist(),
         "fs": float(fs),
+        "original_fs": float(fs),  # NEW: Store original FS for reference
         "r_peaks": {int(k): [int(x) for x in v] for k, v in r_peaks_dict.items()},
         "cycles": {int(k): [[float(x) for x in cycle] for cycle in v] for k, v in cycles.items()},
         "lead_names": [str(name) for name in lead_names],
     }
+
+# --- NEW: Universal resampling endpoint for both upsampling and downsampling ---
+@router.post("/resample")
+def resample_ecg(req: ResampleRequest):
+    """
+    Universal resampling endpoint - handles both upsampling and downsampling.
+    
+    Educational Purpose: 
+    - Downsampling (target_fs < original_fs): Shows aliasing effects
+    - Upsampling (target_fs > original_fs): Shows interpolation effects
+    - Same frequency: No change
+    """
+    file_path = os.path.join(UPLOAD_FOLDER, req.record_number)
+    
+    try:
+        signals, original_fs, lead_names = dsp.load_ecg_record_from_path(file_path)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to load ECG record: {e}")
+    
+    # Apply appropriate resampling
+    if req.target_fs < original_fs:
+        # Downsampling - will cause aliasing
+        resampled_signals = dsp.downsample_signals(signals, original_fs, req.target_fs)
+        resampling_type = "downsampling"
+        aliasing_occurs = True
+    elif req.target_fs > original_fs:
+        # Upsampling - interpolation, no aliasing
+        resampled_signals = dsp.upsample_signals(signals, original_fs, req.target_fs)
+        resampling_type = "upsampling" 
+        aliasing_occurs = False
+    else:
+        # No change
+        resampled_signals = signals
+        resampling_type = "none"
+        aliasing_occurs = False
+    
+    # Recalculate R-peaks on resampled signals
+    r_peaks_dict = dsp.get_r_peaks_per_lead(resampled_signals, req.target_fs, leads=list(range(len(lead_names))))
+    
+    return {
+        "signals": resampled_signals.astype(float).tolist(),
+        "fs": float(req.target_fs),
+        "original_fs": float(original_fs),
+        "r_peaks": {int(k): [int(x) for x in v] for k, v in r_peaks_dict.items()},
+        "lead_names": [str(name) for name in lead_names],
+        "resampling_type": resampling_type,
+        "aliasing_warning": aliasing_occurs,
+        "educational_info": {
+            "operation": f"{original_fs} Hz → {req.target_fs} Hz",
+            "nyquist_original": original_fs / 2,
+            "nyquist_target": req.target_fs / 2,
+            "max_representable_freq": req.target_fs / 2,
+            "explanation": get_resampling_explanation(original_fs, req.target_fs)
+        }
+    }
+
+def get_resampling_explanation(original_fs, target_fs):
+    """Generate educational explanation for the resampling operation."""
+    if target_fs < original_fs:
+        return f"⚠️ DOWNSAMPLING: {target_fs} Hz < {original_fs} Hz. High frequencies above {target_fs/2} Hz will alias (fold back as distortion)."
+    elif target_fs > original_fs:
+        return f"✅ UPSAMPLING: {target_fs} Hz > {original_fs} Hz. Signal becomes smoother through interpolation, but no new information is added."
+    else:
+        return f"ℹ️ NO CHANGE: Sampling rate remains at {original_fs} Hz."
 
 # --- WebSocket streaming ECG samples (unchanged) ---
 @router.websocket("/ws/ecg/{record_number}")
@@ -90,14 +155,39 @@ async def stream_ecg(websocket: WebSocket, record_number: str):
     finally:
         await websocket.close()
 
-
-# --- ECG classification endpoint (REPLACED) ---
+# --- ECG classification endpoint (MODIFIED to use resampled data) ---
 @router.post("/classify")
 def classify_record(req: ClassifyRequest):
     file_path = os.path.join(UPLOAD_FOLDER, req.record_number)
 
     try:
-        rec = wfdb.rdrecord(file_path)
+        # Load and optionally resample based on request
+        signals, original_fs, lead_names = dsp.load_ecg_record_from_path(file_path)
+        
+        # NEW: Apply resampling if target_fs is provided in request body
+        if req.target_fs and req.target_fs != original_fs:
+            if req.target_fs < original_fs:
+                resampled_signals = dsp.downsample_signals(signals, original_fs, req.target_fs)
+                aliasing_warning = True
+            else:
+                resampled_signals = dsp.upsample_signals(signals, original_fs, req.target_fs)
+                aliasing_warning = False
+            
+            # Create a mock record with resampled signals for preprocessing
+            class MockRecord:
+                def __init__(self, signals, fs, sig_name):
+                    self.p_signal = signals
+                    self.fs = fs
+                    self.sig_name = sig_name
+                    
+            rec = MockRecord(resampled_signals, req.target_fs, lead_names)
+            used_fs = req.target_fs
+        else:
+            # Use original signals
+            rec = wfdb.rdrecord(file_path)
+            used_fs = original_fs
+            aliasing_warning = False
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to read record: {e}")
 
@@ -125,7 +215,10 @@ def classify_record(req: ClassifyRequest):
             "label": label,
             "confidence": confidence,
             "probabilities": probabilities,
-            "model_input_shape": X_multi.shape
+            "model_input_shape": X_multi.shape,
+            "used_fs": used_fs,  # Return which FS was used
+            "original_fs": original_fs,  # Return original FS
+            "aliasing_warning": aliasing_warning  # Aliasing warning
         }
 
     # --- Preprocess for binary model ---
@@ -145,16 +238,21 @@ def classify_record(req: ClassifyRequest):
             "label": "Normal ECG",
             "confidence": float(1 - prob_abnormal),
             "probabilities": probabilities,  # still return 6-class probs
-            "model_input_shape": X_multi.shape
+            "model_input_shape": X_multi.shape,
+            "used_fs": used_fs,
+            "original_fs": original_fs,
+            "aliasing_warning": aliasing_warning
         }
     else:
         return {
             "label": "Other Cardiac Abnormalities",
             "confidence": prob_abnormal,
             "probabilities": probabilities,  # still return 6-class probs
-            "model_input_shape": X_multi.shape
+            "model_input_shape": X_multi.shape,
+            "used_fs": used_fs,
+            "original_fs": original_fs,
+            "aliasing_warning": aliasing_warning
         }
-
 
 # --- ECG file upload endpoint (unchanged) ---
 @router.post("/upload")

@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import ECGControls from "./ECGControls";
 import ECGVisualizations from "./ECGVisualizations";
 import ECGAnalysis from "./ECGAnalysis";
-import { fetchEcgData } from "../../services/ecgService";
+import { fetchEcgData, resampleEcgData, classifyWithSampling } from "../../services/ecgService";
 
 const DEFAULT_LEAD_NAMES = [
   "I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6",
@@ -23,6 +23,8 @@ export default function ECGPage() {
   // Signal data
   const [signals, setSignals] = useState([]);
   const [fs, setFs] = useState(500);
+  const [originalFs, setOriginalFs] = useState(500);
+  const [displayFs, setDisplayFs] = useState(500);
   const [rPeaks, setRPeaks] = useState({});
   const [displaySignals, setDisplaySignals] = useState([]);
   const [displayStart, setDisplayStart] = useState(0);
@@ -38,6 +40,8 @@ export default function ECGPage() {
   const [prediction, setPrediction] = useState(null);
   const [predictionProbs, setPredictionProbs] = useState(null);
   const [isPredicting, setIsPredicting] = useState(false);
+  const [aliasingWarning, setAliasingWarning] = useState(false);
+  const [resamplingType, setResamplingType] = useState("none");
   
   // Visualizations
   const [selectedVisualization, setSelectedVisualization] = useState("polar");
@@ -65,6 +69,8 @@ export default function ECGPage() {
     setUploadedFiles(files);
     setPrediction(null);
     setPredictionProbs(null);
+    setAliasingWarning(false);
+    setResamplingType("none");
   };
 
   // Combined upload and load function
@@ -91,8 +97,17 @@ export default function ECGPage() {
         console.log("Loading ECG data...");
         const ecgData = await fetchEcgData(data.filename, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
         
+        console.log("Original ECG data:", {
+          signalsLength: ecgData.signals?.length,
+          fs: ecgData.fs,
+          originalFs: ecgData.original_fs
+        });
+        
         setSignals(ecgData.signals || []);
-        setFs(ecgData.fs || 500);
+        const originalFsValue = ecgData.original_fs || ecgData.fs || 500;
+        setFs(originalFsValue);
+        setOriginalFs(originalFsValue);
+        setDisplayFs(originalFsValue);
         setAllLeads(ecgData.lead_names || DEFAULT_LEAD_NAMES);
         
         // Normalize R-peaks
@@ -116,13 +131,17 @@ export default function ECGPage() {
         setDisplaySignals([]);
         setPrediction(null);
         setPredictionProbs(null);
+        setAliasingWarning(false);
+        setResamplingType("none");
 
         // Set initial display signals based on current mode
         if (signalMode === "cycle") {
-          setDisplaySignals(getCycleSignals(0));
+          const initialSignals = getCycleSignals(0);
+          setDisplaySignals(initialSignals);
         } else {
-          const windowSamples = Math.floor(windowSeconds * (ecgData.fs || 500));
-          setDisplaySignals(getContinuousSignals(0, windowSamples));
+          const windowSamples = Math.floor(windowSeconds * originalFsValue);
+          const initialSignals = getContinuousSignals(0, windowSamples);
+          setDisplaySignals(initialSignals);
         }
         
         setIsPlaying(false);
@@ -137,8 +156,10 @@ export default function ECGPage() {
     }
   };
 
-  // Signal processing helpers
-  const getCycleSignals = (cycleIdx) => {
+  // Signal processing helpers with useCallback
+  const getCycleSignals = useCallback((cycleIdx) => {
+    if (!signals.length) return [];
+    
     const lead0Peaks = rPeaks[leads[0]] || [];
     if (lead0Peaks.length < 2 || cycleIdx >= lead0Peaks.length - 1) return [];
     
@@ -151,11 +172,106 @@ export default function ECGPage() {
     const end = Math.min(startPeak + windowSamples, signals.length);
     
     return signals.slice(start, end);
-  };
+  }, [signals, rPeaks, leads, cycleWindowSize]);
 
-  const getContinuousSignals = (start, windowSize) => {
+  const getContinuousSignals = useCallback((start, windowSize) => {
     const end = Math.min(start + windowSize, signals.length);
     return signals.slice(start, end);
+  }, [signals]);
+
+  // NEW: Handle sampling frequency change
+  const handleSamplingFrequencyChange = async (newFs) => {
+    if (!filename) {
+      alert("Please upload an ECG file first.");
+      return;
+    }
+
+    console.log(`Changing sampling frequency from ${displayFs}Hz to ${newFs}Hz`);
+    
+    setIsLoading(true);
+    
+    try {
+      if (newFs === originalFs) {
+        // Reset to original signals
+        console.log("Resetting to original signals");
+        const ecgData = await fetchEcgData(filename, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+        setSignals(ecgData.signals || []);
+        setFs(originalFs);
+        setRPeaks(ecgData.r_peaks || {});
+        setAliasingWarning(false);
+        setResamplingType("none");
+      } else {
+        // Apply resampling
+        console.log("Applying resampling...");
+        const resampledData = await resampleEcgData(filename, newFs);
+        console.log("Resampled data:", {
+          signalsLength: resampledData.signals?.length,
+          newFs: resampledData.fs,
+          aliasing: resampledData.aliasing_warning
+        });
+        
+        setSignals(resampledData.signals || []);
+        setFs(newFs);
+        setRPeaks(resampledData.r_peaks || {});
+        setAliasingWarning(resampledData.aliasing_warning || false);
+        setResamplingType(resampledData.resampling_type || "none");
+      }
+
+      setDisplayFs(newFs);
+
+      // Reset playback and update display
+      setIsPlaying(false);
+      clearTimeout(timerRef.current);
+      cycleIdxRef.current = 0;
+      setDisplayStart(0);
+      
+      // Force update display signals with current signals
+      if (signalMode === "cycle") {
+        const newDisplaySignals = getCycleSignals(0);
+        setDisplaySignals(newDisplaySignals);
+      } else {
+        const windowSamples = Math.floor(windowSeconds * newFs);
+        const newDisplaySignals = getContinuousSignals(0, windowSamples);
+        setDisplaySignals(newDisplaySignals);
+      }
+      
+      console.log("Display updated with new signals");
+      
+    } catch (err) {
+      console.error("Resampling failed:", err);
+      alert("Failed to resample signals: " + err.message);
+      setDisplayFs(originalFs);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // NEW: Handle classification with current sampling frequency
+  const handleClassification = async () => {
+    if (!filename) {
+      alert("Please upload an ECG file first.");
+      return;
+    }
+
+    setIsPredicting(true);
+    try {
+      console.log(`Classifying with sampling frequency: ${displayFs}Hz`);
+      const result = await classifyWithSampling(filename, displayFs);
+      console.log("Classification result:", {
+        label: result.label,
+        used_fs: result.used_fs,
+        original_fs: result.original_fs,
+        aliasing_warning: result.aliasing_warning
+      });
+      setPrediction(result.label);
+      setPredictionProbs(result.probabilities);
+      setAliasingWarning(result.aliasing_warning || false);
+    } catch (err) {
+      console.error("Classification error:", err);
+      alert("Classification failed: " + err.message);
+    } finally {
+      setIsPredicting(false);
+    }
   };
 
   const getXorChunk = (leadIdx, cycleIdx) => {
@@ -548,10 +664,12 @@ export default function ECGPage() {
         
         // Set initial display signals
         if (signalMode === "cycle") {
-          setDisplaySignals(getCycleSignals(0));
+          const initialSignals = getCycleSignals(0);
+          setDisplaySignals(initialSignals);
         } else {
           const windowSamples = Math.floor(windowSeconds * fs);
-          setDisplaySignals(getContinuousSignals(0, windowSamples));
+          const initialSignals = getContinuousSignals(0, windowSamples);
+          setDisplaySignals(initialSignals);
         }
       }
       
@@ -609,11 +727,13 @@ export default function ECGPage() {
     cycleIdxRef.current = 0;
     
     if (signalMode === "cycle") {
-      setDisplaySignals(getCycleSignals(0));
+      const newSignals = getCycleSignals(0);
+      setDisplaySignals(newSignals);
     } else {
       const windowSamples = Math.floor(windowSeconds * fs);
       setDisplayStart(0);
-      setDisplaySignals(getContinuousSignals(0, windowSamples));
+      const newSignals = getContinuousSignals(0, windowSamples);
+      setDisplaySignals(newSignals);
     }
     
     // Reset visualizations
@@ -621,7 +741,7 @@ export default function ECGPage() {
     setCrpMatrix(null);
     setScatterData([]);
     setXorChunks([]);
-  }, [signalMode, signals, leads, cycleWindowSize, windowSeconds, fs]);
+  }, [signalMode, signals, leads, cycleWindowSize, windowSeconds, fs, getCycleSignals, getContinuousSignals]);
 
   // Lead selection
   const toggleLead = (leadIdx) => {
@@ -663,6 +783,17 @@ export default function ECGPage() {
   const signalData = displaySignals.map((_, i) =>
     signalMode === "cycle" ? i / fs : (displayStart + i) / fs
   );
+
+  // Debug logging
+  console.log("ECGPage state:", {
+    signalsLength: signals.length,
+    displaySignalsLength: displaySignals.length,
+    fs,
+    displayFs,
+    originalFs,
+    aliasingWarning,
+    resamplingType
+  });
 
   return (
     <div style={{
@@ -748,6 +879,11 @@ export default function ECGPage() {
           selectedVisualization={selectedVisualization}
           isLoading={isLoading}
           filename={filename}
+          displayFs={displayFs}
+          originalFs={originalFs}
+          onSamplingFrequencyChange={handleSamplingFrequencyChange}
+          aliasingWarning={aliasingWarning}
+          resamplingType={resamplingType}
         />
 
         <ECGVisualizations
@@ -778,6 +914,10 @@ export default function ECGPage() {
           clearPolarTraces={clearPolarTraces}
           clearRecurrenceMatrix={clearRecurrenceMatrix}
           resetXorChunks={resetXorChunks}
+          aliasingWarning={aliasingWarning}
+          displayFs={displayFs}
+          originalFs={originalFs}
+          resamplingType={resamplingType}
         />
       </div>
 
@@ -797,6 +937,11 @@ export default function ECGPage() {
         setPrediction={setPrediction}
         setPredictionProbs={setPredictionProbs}
         setIsPredicting={setIsPredicting}
+        onClassification={handleClassification}
+        aliasingWarning={aliasingWarning}
+        displayFs={displayFs}
+        originalFs={originalFs}
+        resamplingType={resamplingType}
       />
     </div>
   );
