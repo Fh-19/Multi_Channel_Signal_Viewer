@@ -179,7 +179,7 @@ export default function ECGPage() {
     return signals.slice(start, end);
   }, [signals]);
 
-  // NEW: Handle sampling frequency change
+  // Handle sampling frequency change
   const handleSamplingFrequencyChange = async (newFs) => {
     if (!filename) {
       alert("Please upload an ECG file first.");
@@ -246,7 +246,7 @@ export default function ECGPage() {
     }
   };
 
-  // NEW: Handle classification with current sampling frequency
+  //Handle classification with current sampling frequency
   const handleClassification = async () => {
     if (!filename) {
       alert("Please upload an ECG file first.");
