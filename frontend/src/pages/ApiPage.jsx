@@ -1,177 +1,259 @@
 import React, { useState, useRef } from "react";
+import axios from "axios";
+import WaveSurfer from "wavesurfer.js";
 
-function ApiPage() {
-  const [file, setFile] = useState(null);
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [audioUrl, setAudioUrl] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef(null);
+export default function AudioAnalysisPage() {
+  const [audioFile, setAudioFile] = useState(null);
+  const [prediction, setPrediction] = useState(null);
+  const [aliasResult, setAliasResult] = useState(null);
+  const [loadingPredict, setLoadingPredict] = useState(false);
+  const [loadingAlias, setLoadingAlias] = useState(false);
+  const [rate, setRate] = useState(10000); // ✅ user can choose alias rate
 
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    setFile(selectedFile);
-    if (selectedFile) {
-      setAudioUrl(URL.createObjectURL(selectedFile));
-      setResult(null);
-    }
+  const waveformRef = useRef(null);
+  const aliasWaveformRef = useRef(null);
+  const wavesurferPredict = useRef(null);
+  const wavesurferAlias = useRef(null);
+
+  // ✅ Initialize waveform
+  const initWaveform = (ref, fileUrl) => {
+    if (!ref.current) return;
+
+    if (ref === waveformRef && wavesurferPredict.current) wavesurferPredict.current.destroy();
+    if (ref === aliasWaveformRef && wavesurferAlias.current) wavesurferAlias.current.destroy();
+
+    const ws = WaveSurfer.create({
+      container: ref.current,
+      waveColor: "#9db8ff",
+      progressColor: "#2055c0",
+      cursorColor: "#2055c0",
+      height: 90,
+    });
+
+    ws.load(fileUrl);
+
+    if (ref === waveformRef) wavesurferPredict.current = ws;
+    else wavesurferAlias.current = ws;
   };
 
-  const handleUpload = async () => {
-    if (!file) return alert("Please select a file first!");
+  // ✅ Handle upload
+  const handleAudioUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setAudioFile(file);
+    setPrediction(null);
+    setAliasResult(null);
+
+    const fileUrl = URL.createObjectURL(file);
+    initWaveform(waveformRef, fileUrl);
+  };
+
+  // ✅ Predict handler
+  const handlePredict = async () => {
+    if (!audioFile) return alert("Please upload an audio file first!");
+    setLoadingPredict(true);
+    setPrediction(null);
+
     const formData = new FormData();
-    formData.append("file", file);
-    setLoading(true);
+    formData.append("file", audioFile);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/predict", {
-        method: "POST",
-        body: formData,
+      const res = await axios.post("http://127.0.0.1:8000/api/predict", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
-      const data = await res.json();
-      setResult(data);
-    } catch (error) {
-      console.error("Error:", error);
-      alert("Something went wrong!");
+
+      console.log("Prediction Result:", res.data);
+      setPrediction(res.data);
+
+      if (res.data.file_url) initWaveform(waveformRef, res.data.file_url);
+    } catch (err) {
+      console.error(err);
+      alert("Prediction failed!");
+    } finally {
+      setLoadingPredict(false);
     }
-    setLoading(false);
   };
 
-  const togglePlay = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (isPlaying) {
-      audio.pause();
-      setIsPlaying(false);
-    } else {
-      audio.play();
-      setIsPlaying(true);
+  // ✅ Alias handler
+  const handleAlias = async () => {
+    if (!audioFile) return alert("Please upload an audio file first!");
+    setLoadingAlias(true);
+    setAliasResult(null);
+
+    const formData = new FormData();
+    formData.append("file", audioFile);
+    formData.append("rate", rate); // ✅ fixed 422 error
+
+    try {
+      const res = await axios.post("http://127.0.0.1:8000/api/alias", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      console.log("Alias Result:", res.data);
+      setAliasResult(res.data);
+
+      if (res.data.alias_file_url) {
+        setTimeout(() => initWaveform(aliasWaveformRef, res.data.alias_file_url), 300);
+      }
+    } catch (err) {
+      console.error("Alias Error:", err);
+      alert("Aliasing failed!");
+    } finally {
+      setLoadingAlias(false);
     }
-    audio.onended = () => setIsPlaying(false);
+  };
+
+  // ✅ Play buttons
+  const handlePlayPause = (type) => {
+    if (type === "predict" && wavesurferPredict.current) wavesurferPredict.current.playPause();
+    if (type === "alias" && wavesurferAlias.current) wavesurferAlias.current.playPause();
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        height: "100vh",
-        width: "100%",
-        background: "#f0f4f8",
-        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-      }}
-    >
-      {/* LEFT: Upload + Playback (70%) */}
-      <div
-        style={{
-          flex: 7,
-          padding: "20px 28px",
-          overflowY: "auto",
-          borderRight: "2px solid #dbe2ef",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <h1
-          style={{
-            margin: "0 0 18px 0",
-            fontWeight: 700,
-            fontSize: 26,
-            color: "#263357",
-          }}
-        >
-          Drone / Noise Audio Detection
-        </h1>
+    <div style={{ display: "flex", height: "100vh", background: "#f0f4f8" }}>
+      {/* LEFT PANEL */}
+      <div style={{ flex: 7, padding: "20px 30px", borderRight: "2px solid #dbe2ef" }}>
+        <h1 style={{ color: "#263357", fontWeight: 700 }}>🎵 Audio Analysis</h1>
 
         {/* Upload */}
-        <input
-          type="file"
-          accept=".wav"
-          onChange={handleFileChange}
-          style={{
-            marginBottom: 12,
-            padding: "10px 14px",
-            borderRadius: 7,
-            border: "1px solid #b7cdfc",
-            width: "100%",
-            maxWidth: 420,
-            fontSize: 16,
-            background: "#fafeff",
-          }}
-        />
+        <div style={{ margin: "15px 0" }}>
+          <label style={{ fontWeight: 600, color: "#2055c0" }}>Upload Audio File:</label>
+          <input
+            type="file"
+            accept="audio/*"
+            onChange={handleAudioUpload}
+            style={{
+              display: "block",
+              marginTop: 6,
+              padding: "8px",
+              borderRadius: 7,
+              border: "1px solid #b7cdfc",
+              background: "#fff",
+            }}
+          />
+        </div>
 
-        <button
-          onClick={handleUpload}
-          disabled={loading}
+        {/* 🎧 Original / Predicted waveform */}
+        <div
+          ref={waveformRef}
           style={{
-            padding: "10px 18px",
-            borderRadius: 8,
-            border: "none",
-            background: loading ? "#7f93b7" : "#2055c0",
-            color: "#fff",
-            fontWeight: 700,
-            cursor: loading ? "not-allowed" : "pointer",
+            background: "#ffffff",
+            borderRadius: 10,
+            boxShadow: "0 3px 8px rgba(0,0,0,0.1)",
+            padding: "10px",
+            marginBottom: 20,
           }}
-        >
-          {loading ? "Processing..." : "Upload & Predict"}
-        </button>
+        ></div>
 
-        {/* Audio playback */}
-        {audioUrl && (
-          <div style={{ marginTop: 25 }}>
-            <h3 style={{ fontWeight: 600, marginBottom: 8, color: "#263357" }}>
-              🎵 Uploaded Audio
-            </h3>
-            <audio ref={audioRef} src={audioUrl} style={{ width: "100%" }} />
-            <button
-              onClick={togglePlay}
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <button
+            onClick={() => handlePlayPause("predict")}
+            style={{ background: "#2e6adf", color: "#fff", border: "none", padding: "10px 20px", borderRadius: 7 }}
+          >
+            ▶ Play / Pause
+          </button>
+
+          <button
+            onClick={handlePredict}
+            disabled={loadingPredict}
+            style={{
+              background: loadingPredict ? "#b3b3b3" : "#1e8b54",
+              color: "#fff",
+              padding: "10px 20px",
+              borderRadius: 7,
+              border: "none",
+            }}
+          >
+            {loadingPredict ? "Predicting..." : "Predict"}
+          </button>
+
+          <div>
+            <label style={{ marginRight: "8px", color: "#2055c0", fontWeight: 600 }}>Aliasing Rate:</label>
+            <input
+              type="number"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              style={{ width: "100px", padding: "6px", borderRadius: 5, border: "1px solid #b7cdfc" }}
+            />
+          </div>
+
+          <button
+            onClick={handleAlias}
+            disabled={loadingAlias}
+            style={{
+              background: loadingAlias ? "#b3b3b3" : "#c02424",
+              color: "#fff",
+              padding: "10px 20px",
+              borderRadius: 7,
+              border: "none",
+            }}
+          >
+            {loadingAlias ? "Aliasing..." : "Aliasing"}
+          </button>
+        </div>
+
+        {/* Prediction Result */}
+        {prediction && (
+          <div style={{ marginTop: 20, background: "#fff", padding: 16, borderRadius: 10, maxWidth: 500 }}>
+            <h3 style={{ color: "#2055c0" }}>Prediction Result</h3>
+            <p><b>Label:</b> {prediction.predicted_label}</p>
+            <p><b>Confidence:</b> {prediction.confidence.toFixed(2)}%</p>
+            <p><b>Sample Rate:</b> {prediction.sample_rate} Hz</p>
+            {prediction.spec_url && (
+              <img src={prediction.spec_url} alt="Spectrogram" style={{ width: "100%", borderRadius: 10 }} />
+            )}
+          </div>
+        )}
+
+        {/* Aliasing Result */}
+        {aliasResult && (
+          <div style={{ marginTop: 25, background: "#fff", padding: 16, borderRadius: 10, maxWidth: 500 }}>
+            <h3 style={{ color: "#c02424" }}>Aliasing Result</h3>
+            <p><b>Label:</b> {aliasResult.predicted_label}</p>
+            <p><b>Confidence:</b> {aliasResult.confidence.toFixed(2)}%</p>
+            <p><b>Sample Rate:</b> {aliasResult.sample_rate} Hz</p>
+
+            <div
+              ref={aliasWaveformRef}
               style={{
-                marginTop: 12,
-                padding: "8px 16px",
-                borderRadius: 6,
-                border: "none",
-                background: isPlaying ? "#e74c3c" : "#2ecc71",
-                color: "#fff",
-                fontWeight: 700,
-                cursor: "pointer",
+                background: "#ffffff",
+                borderRadius: 10,
+                boxShadow: "0 3px 8px rgba(0,0,0,0.1)",
+                padding: "10px",
+                margin: "10px 0",
               }}
+            ></div>
+
+            <button
+              onClick={() => handlePlayPause("alias")}
+              style={{ background: "#e74c3c", color: "#fff", border: "none", padding: "10px 20px", borderRadius: 7 }}
             >
-              {isPlaying ? "⏸ Pause" : "▶️ Play"}
+              ▶ Play Aliased Audio
             </button>
+
+            {aliasResult.alias_spec_url && (
+              <img
+                src={aliasResult.alias_spec_url}
+                alt="Alias Spectrogram"
+                style={{ width: "100%", borderRadius: 10, marginTop: 10 }}
+              />
+            )}
           </div>
         )}
       </div>
 
-      {/* RIGHT: Prediction (30%) */}
-      <div
-        style={{
-          flex: 3,
-          padding: "20px 24px",
-          overflowY: "auto",
-          background: "#fff",
-        }}
-      >
-        <h2 style={{ marginTop: 0, marginBottom: 12, color: "#263357" }}>
-          📊 Prediction Result
-        </h2>
-
-        {result ? (
-          <div>
-            <p style={{ fontSize: 15, marginBottom: 8 }}>
-              <strong>Predicted Label:</strong> {result.predicted_label}
-            </p>
-            <p style={{ fontSize: 15, marginBottom: 8 }}>
-              <strong>Confidence:</strong>{" "}
-              {typeof result.confidence === "number"
-                ? `${result.confidence.toFixed(2)}%`
-                : result.confidence}
-            </p>
-          </div>
-        ) : (
-          <div style={{ color: "#8d97b6" }}>No prediction yet.</div>
-        )}
+      {/* RIGHT PANEL */}
+      <div style={{ flex: 3, padding: "25px", background: "#f9fbff" }}>
+        <h2 style={{ color: "#2055c0" }}>How It Works</h2>
+        <ul style={{ color: "#4a5568", fontSize: 14, lineHeight: 1.6 }}>
+          <li>Upload an audio file in `.wav` or `.mp3` format.</li>
+          <li>Click <b>Predict</b> to classify the audio with ML model.</li>
+          <li>Click <b>Aliasing</b> to analyze frequency distortions.</li>
+          <li>You can play both waveforms independently.</li>
+          <li>You can change aliasing rate for different results.</li>
+        </ul>
       </div>
     </div>
   );
 }
-
-export default ApiPage;
