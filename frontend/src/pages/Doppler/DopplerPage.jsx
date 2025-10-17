@@ -7,6 +7,7 @@ export default function DopplerPage() {
   const [frequency, setFrequency] = useState(300);
   const [speed, setSpeed] = useState(90);
   const [realisticMode, setRealisticMode] = useState(true);
+  const [samplingRate, setSamplingRate] = useState(22050); 
   const [loading, setLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
@@ -54,6 +55,8 @@ export default function DopplerPage() {
           setFrequency={setFrequency}
           speed={speed}
           setSpeed={setSpeed}
+          samplingRate={samplingRate} // NEW: Pass sampling rate
+          setSamplingRate={setSamplingRate} // NEW: Pass setter
           playing={playing}
           setPlaying={setPlaying}
           setError={setError}
@@ -65,13 +68,14 @@ export default function DopplerPage() {
           setPrediction={setPrediction}
           setError={setError}
           setWaveform={setWaveform}
-          setAudioUrl={setAudioUrl} // Pass new setter
-          setPlayingUploaded={setPlayingUploaded} // Pass new setter
+          setAudioUrl={setAudioUrl}
+          setPlayingUploaded={setPlayingUploaded}
           loading={loading}
           uploadStatus={uploadStatus}
           error={error}
-          audioUrl={audioUrl} // Pass audio URL
-          playingUploaded={playingUploaded} // Pass playback state
+          audioUrl={audioUrl}
+          playingUploaded={playingUploaded}
+          samplingRate={samplingRate} // NEW: Pass sampling rate for prediction
         />
       </div>
 
@@ -82,6 +86,8 @@ export default function DopplerPage() {
         audioUrl={audioUrl}
         playingUploaded={playingUploaded}
         setPlayingUploaded={setPlayingUploaded}
+        samplingRate={samplingRate} // NEW: Pass sampling rate for display
+        uploadStatus={uploadStatus} // NEW: Pass upload status for actual file sample rate
       />
     </div>
   );

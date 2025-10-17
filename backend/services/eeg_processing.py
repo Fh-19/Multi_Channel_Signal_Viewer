@@ -1,4 +1,3 @@
-# backend/services/eeg_processing.py
 import mne
 import numpy as np
 from sklearn.preprocessing import StandardScaler
@@ -15,7 +14,7 @@ def load_raw(file_path: str):
 def preprocess_raw(raw, highpass=0.5, resample_to=None):
     raw.load_data()
     # Band-pass filter (e.g., 0.5-40 Hz) removes DC drift and high-freq noise
-    raw.filter(l_freq=highpass, h_freq=40.0)
+    raw.filter(l_freq=highpass, h_freq=80.0)
     
     # remove 50 Hz (or 60 Hz) power-line noise
     raw.notch_filter(freqs=[50, 100])  # adjust to your mains frequency
@@ -37,3 +36,17 @@ def standardize(data: np.ndarray) -> np.ndarray:
     """Standard-score each channel separately (like during training)."""
     scaler = StandardScaler()
     return scaler.fit_transform(data.T).T   # keep shape (channels, samples)
+
+# NEW: Function for aliasing experiment
+def resample_raw(raw, target_fs: float):
+    """
+    Resample raw EEG data to target frequency for aliasing experiments.
+    Returns a copy of the raw object with new sampling rate.
+    """
+    raw_copy = raw.copy()
+    current_fs = raw_copy.info['sfreq']
+    
+    if target_fs != current_fs:
+        raw_copy.resample(target_fs)
+    
+    return raw_copy

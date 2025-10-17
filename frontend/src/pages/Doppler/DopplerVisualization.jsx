@@ -3,10 +3,12 @@ import Plot from "react-plotly.js";
 
 export default function DopplerVisualization({ 
   waveform, 
-  prediction, 
+  prediction,
   audioUrl, 
   playingUploaded, 
-  setPlayingUploaded 
+  setPlayingUploaded,
+  samplingRate, // NEW: Receive sampling rate
+  uploadStatus, // NEW: Receive upload status for file info
 }) {
   // Clean up audio URL when component unmounts
   useEffect(() => {
@@ -52,6 +54,29 @@ export default function DopplerVisualization({
       <h2 style={{ color: "#2055c0", marginBottom: 20 }}>
         Uploaded Audio Waveform
       </h2>
+
+      {/* NEW: Display sampling rate information */}
+      <div style={{ 
+        marginBottom: 20, 
+        padding: "12px", 
+        background: "#f8f9fa", 
+        borderRadius: "6px",
+        border: "1px solid #e9ecef"
+      }}>
+        <p style={{ margin: 0, color: "#495057", fontSize: "14px" }}>
+          <strong>Current Sampling Rate:</strong> {samplingRate} Hz
+        </p>
+        {uploadStatus?.sampling_rate && (
+          <p style={{ margin: "5px 0 0 0", color: "#6c757d", fontSize: "12px" }}>
+            <strong>Uploaded File Sample Rate:</strong> {uploadStatus.sampling_rate} Hz
+          </p>
+        )}
+        {prediction?.sampling_rate_used && (
+          <p style={{ margin: "5px 0 0 0", color: "#6c757d", fontSize: "12px" }}>
+            <strong>Prediction Sample Rate:</strong> {prediction.sampling_rate_used} Hz
+          </p>
+        )}
+      </div>
 
       {/* Play button in visualization panel */}
       {audioUrl && (
@@ -115,6 +140,12 @@ export default function DopplerVisualization({
           <p style={{ color: "#333" }}>
             <b>Frequency:</b> {prediction.pred_freq_hz.toFixed(2)} Hz
           </p>
+          {/* NEW: Display sampling rate used for prediction */}
+          {prediction.sampling_rate_used && (
+            <p style={{ color: "#333", fontSize: "14px" }}>
+              <b>Processing Sample Rate:</b> {prediction.sampling_rate_used} Hz
+            </p>
+          )}
         </div>
       )}
     </div>

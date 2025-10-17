@@ -13,8 +13,9 @@ export default function DopplerUpload({
   error,
   audioUrl,
   playingUploaded,
+  samplingRate, // NEW: Receive sampling rate for prediction
 }) {
-  //  Upload and auto-predict file
+  // Upload and auto-predict file
   const handleFileUpload = async (e) => {
     setError(null);
     const file = e.target.files[0];
@@ -33,8 +34,8 @@ export default function DopplerUpload({
       const url = URL.createObjectURL(file);
       setAudioUrl(url);
 
-      // Auto-run prediction
-      const pred = await predictDopplerFile(file);
+      // Auto-run prediction with current sampling rate
+      const pred = await predictDopplerFile(file, samplingRate); // NEW: Pass sampling rate
       setPrediction(pred);
 
       // Visualize waveform
@@ -99,6 +100,11 @@ export default function DopplerUpload({
         }}
       />
       
+      {/* NEW: Display current prediction sampling rate */}
+      <p style={{ fontSize: "12px", color: "#666", marginBottom: 10 }}>
+        Prediction will use sample rate: <b>{samplingRate} Hz</b>
+      </p>
+      
       {loading && (
         <p style={{ marginTop: 10, color: "#8d97b6" }}>Processing...</p>
       )}
@@ -107,18 +113,26 @@ export default function DopplerUpload({
       )}
 
       {uploadStatus && (
-        <p
-          style={{
-            marginTop: 10,
-            color: "#2e7d32",
-            background: "#e8f5e9",
-            padding: "8px 12px",
-            borderRadius: 6,
-            fontWeight: 500,
-          }}
-        >
-          ✅ Upload complete: <b>{uploadStatus.filename}</b>
-        </p>
+        <div>
+          <p
+            style={{
+              marginTop: 10,
+              color: "#2e7d32",
+              background: "#e8f5e9",
+              padding: "8px 12px",
+              borderRadius: 6,
+              fontWeight: 500,
+            }}
+          >
+            ✅ Upload complete: <b>{uploadStatus.filename}</b>
+          </p>
+          {/* NEW: Display actual file sample rate */}
+          {uploadStatus.sampling_rate && (
+            <p style={{ fontSize: "12px", color: "#666", marginTop: 5 }}>
+              File sample rate: <b>{uploadStatus.sampling_rate} Hz</b>
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

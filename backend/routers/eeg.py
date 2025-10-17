@@ -64,12 +64,14 @@ async def upload_eeg_file(file: UploadFile = File(...)):
 def get_segments(
     filename: str = Query(...),
     channels: list[str] | None = Query(None),
-    segment_duration: float = Query(2.0),
-    highpass: float = Query(0.5),
-    resample_to: float | None = Query(None),
+    segment_duration: float = Query(2.0, description="Segment length in seconds"),
+    highpass: float = Query(0.5, description="Highpass filter cutoff (Hz)"),
+    resample_to: float | None = Query(None, description="Resample frequency (Hz)"),
+    max_duration: float = Query(100.0, description="Maximum EEG duration to process (seconds)"),
 ):
     """
-    Return fixed-length EEG segments, filtered & converted to µV.
+    Return fixed-length EEG segments (in µV) from the uploaded file.
+    Limits output to the first `max_duration` seconds to prevent large responses.
     """
     file_path = os.path.join(UPLOAD_DIR, filename)
     if not os.path.exists(file_path):
@@ -88,11 +90,23 @@ def get_segments(
     if not picks:
         raise HTTPException(status_code=400, detail="No valid channels selected")
 
-    data, times = raw.get_data(picks=picks, return_times=True)  # V
-    data_uV = to_microvolts(data)                               # µV
+    # Get data and convert to µV
+    data, times = raw.get_data(picks=picks, return_times=True)
+    data_uV = to_microvolts(data)
     fs = raw.info["sfreq"]
     samples_per_segment = int(segment_duration * fs)
 
+    # ------------------------------------------------------------
+    #   Limit data to the first `max_duration` seconds
+    # ------------------------------------------------------------
+    max_samples = int(max_duration * fs)
+    if data_uV.shape[1] > max_samples:
+        data_uV = data_uV[:, :max_samples]
+        times = times[:max_samples]
+
+    # ------------------------------------------------------------
+    #   Create fixed-length segments
+    # ------------------------------------------------------------
     segments = []
     segment_times = []
 
@@ -108,14 +122,21 @@ def get_segments(
         "segment_times": segment_times,
         "fs": fs,
         "channels": picks,
+        "note": f"Only first {max_duration} seconds of EEG processed to limit payload size.",
     }
 
 
+
 @router.post("/predict")
-async def predict(file: UploadFile = File(...), model_fs: int = 256):
+async def predict(
+    file: UploadFile = File(...), 
+    model_fs: int = 256,
+    experiment_fs: float | None = Query(None)
+):
     """
     Predict EEG class using pretrained model.
     Resamples & filters to match training preprocessing.
+    Supports experimental sampling frequency for aliasing experiments.
     """
     suffix = ".edf" if file.filename.endswith(".edf") else ".set"
     tmp_path = None
@@ -127,7 +148,12 @@ async def predict(file: UploadFile = File(...), model_fs: int = 256):
             tmp_path = tmp.name
 
         raw = load_raw(tmp_path)
-        raw = preprocess_raw(raw, highpass=0.5, resample_to=model_fs)
+        
+        # Apply experimental sampling frequency if provided
+        if experiment_fs is not None:
+            raw = preprocess_raw(raw, highpass=0.5, resample_to=experiment_fs)
+        else:
+            raw = preprocess_raw(raw, highpass=0.5, resample_to=model_fs)
 
         data = raw.get_data()            # (channels, samples) in Volts
         if data.shape[0] < 19:
@@ -172,6 +198,7 @@ async def predict(file: UploadFile = File(...), model_fs: int = 256):
             "prediction": CLASS_NAMES[pred_class],
             "confidence": float(avg_probs[pred_class]),
             "probabilities": {CLASS_NAMES[i]: float(avg_probs[i]) for i in range(len(CLASS_NAMES))},
+            "experiment_fs": experiment_fs if experiment_fs else model_fs,
         }
 
     except Exception as e:

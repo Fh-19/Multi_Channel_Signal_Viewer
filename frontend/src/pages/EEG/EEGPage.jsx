@@ -50,6 +50,11 @@ function EEGPage() {
   // Loading state
   const [isLoading, setIsLoading] = useState(false);
 
+  // NEW: Aliasing experiment state
+  const [experimentalFs, setExperimentalFs] = useState(fs);
+  const [originalFs, setOriginalFs] = useState(fs);
+  const [isResampling, setIsResampling] = useState(false);
+
   // internal refs
   const segmentIndexRef = useRef(0);
   const intervalRef = useRef(null);
@@ -85,6 +90,8 @@ function EEGPage() {
       setAllChannels(meta.channels || []);
       setChannels((meta.channels || []).slice(0, 3));
       setFs(meta.sfreq || 250);
+      setOriginalFs(meta.sfreq || 250);
+      setExperimentalFs(meta.sfreq || 250);
       setBandPowerChannel(null);
       setXorChannel(null);
 
@@ -106,16 +113,17 @@ function EEGPage() {
     }
   };
 
-  // ----- Fetch segments when filename or channels change -----
+  // ----- Fetch segments when filename, channels, OR experimentalFs changes -----
   useEffect(() => {
     if (!filename || channels.length === 0) return;
 
     async function loadSegments() {
       try {
-        const data = await fetchEegSegments(filename, channels);
+        setIsResampling(true);
+        const data = await fetchEegSegments(filename, channels, experimentalFs);
         setSegments(data.segments || []);
         setSegmentTimes(data.segment_times || []);
-        setFs(data.fs || 250);
+        setFs(data.fs || experimentalFs);
         setBuffer({});
         setTime([]);
         setXorChunks([]);
@@ -125,23 +133,25 @@ function EEGPage() {
         // Reset loading state when segments are loaded and ready
         setTimeout(() => {
           setIsLoading(false);
-        }, 500);
+          setIsResampling(false);
+        }, 256);
       } catch (err) {
         console.error(err);
         alert("Could not load segments.");
         // Reset loading state on error
         setIsLoading(false);
+        setIsResampling(false);
       }
     }
     loadSegments();
-  }, [filename, channels]);
+  }, [filename, channels, experimentalFs]);
 
   // ----- Playback loop (segments -> buffer) -----
   useEffect(() => {
     // stop previous interval
     clearInterval(intervalRef.current);
 
-    if (!segments.length || !isPlaying || isLoading) return;
+    if (!segments.length || !isPlaying || isLoading || isResampling) return;
 
     const segDurationMs = (() => {
       if (segmentTimes && segmentTimes.length > 0 && segmentTimes[0].length > 1) {
@@ -278,7 +288,7 @@ function EEGPage() {
     }, intervalMs);
 
     return () => clearInterval(intervalRef.current);
-  }, [segments, channels, fs, isPlaying, playbackSpeed, windowSeconds, xorTolerance, recurrencePair, buffer, xorChannel, isLoading, segmentTimes]);
+  }, [segments, channels, fs, isPlaying, playbackSpeed, windowSeconds, xorTolerance, recurrencePair, buffer, xorChannel, isLoading, isResampling, segmentTimes]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -305,7 +315,7 @@ function EEGPage() {
       fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
     }}>
       {/* Loading Overlay */}
-      {isLoading && (
+      {(isLoading || isResampling) && (
         <div style={{
           position: "fixed",
           top: 0,
@@ -325,7 +335,7 @@ function EEGPage() {
             color: "#2055c0",
             marginBottom: "20px"
           }}>
-            Loading EEG Data...
+            {isResampling ? "Resampling EEG Data..." : "Loading EEG Data..."}
           </div>
           <div style={{
             width: "50px",
@@ -374,7 +384,12 @@ function EEGPage() {
           allChannels={allChannels}
           channels={channels}
           toggleChannel={toggleChannel}
-          isLoading={isLoading}
+          isLoading={isLoading || isResampling}
+          // NEW: Aliasing experiment props
+          experimentalFs={experimentalFs}
+          setExperimentalFs={setExperimentalFs}
+          originalFs={originalFs}
+          isResampling={isResampling}
         />
 
         <EEGVisualizations
@@ -450,7 +465,7 @@ function EEGPage() {
           setPolarChannel={setPolarChannel}
           polarMode={polarMode}
           setPolarMode={setPolarMode}
-          isLoading={isLoading}
+          isLoading={isLoading || isResampling}
         />
       </div>
 
@@ -472,10 +487,13 @@ function EEGPage() {
         setBandPowers={setBandPowers}
         bandPowerChannel={bandPowerChannel}
         setBandPowerChannel={setBandPowerChannel}
-        isLoading={isLoading}
+        isLoading={isLoading || isResampling}
+        experimentalFs={experimentalFs}
+        isPlaying = {isPlaying}
       />
     </div>
   );
 }
 
 export default EEGPage;
+

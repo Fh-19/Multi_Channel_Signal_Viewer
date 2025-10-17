@@ -1,9 +1,12 @@
+# backend/services/doppler_processing.py
+
 import numpy as np
 import soundfile as sf
 import sounddevice as sd
 from scipy.signal import butter, filtfilt, iirpeak, fftconvolve
+import librosa  # NEW: For resampling if needed
 
-def realistic_car_passby(velocity=30.0, base_freq=300.0, duration=8.0, sr=44100):
+def realistic_car_passby(velocity=30.0, base_freq=300.0, duration=8.0, sr=22050):
     """
     Realistic car pass-by simulation with multiple audio components
     """
@@ -86,23 +89,24 @@ def realistic_car_passby(velocity=30.0, base_freq=300.0, duration=8.0, sr=44100)
     
     return mono_signal, sr, base_freq
 
-def DopplerShift(frequency, speed, play_sound=False, realistic=True):
+def DopplerShift(frequency, speed, play_sound=False, realistic=True, sampling_rate=22050):  # NEW: Added sampling_rate parameter
     """
     Generate Doppler shift - now with realistic car simulation option
     speed: in km/h
+    sampling_rate: sample rate for audio generation (Hz)
     """
     if realistic:
-        # Use realistic car pass-by simulation
+        # Use realistic car pass-by simulation with specified sampling rate
         signal, sample_rate, base_freq = realistic_car_passby(
-            velocity=speed,  # Already in km/h for the function
+            velocity=speed,
             base_freq=frequency, 
             duration=8.0, 
-            sr=44100
+            sr=sampling_rate  # NEW: Use provided sampling rate
         )
     else:
-        # Fallback to simple Doppler for comparison
+        # Fallback to simple Doppler for comparison with specified sampling rate
         v_sound = 343
-        sample_rate = 44100
+        sample_rate = sampling_rate  # NEW: Use provided sampling rate
         duration = 6
         t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
         
@@ -121,7 +125,8 @@ def DopplerShift(frequency, speed, play_sound=False, realistic=True):
     # Play sound immediately if requested
     if play_sound:
         try:
-            sd.play(signal, sample_rate)
+            print(f"Playing Doppler with sampling rate: {sample_rate}")
+            sd.play(signal, samplerate=sample_rate)
         except Exception as e:
             print(f"Could not play sound: {e}")
     
