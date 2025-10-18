@@ -30,7 +30,7 @@ export const predictDopplerFile = async (file, sampling_rate = 22050) => {
   const formData = new FormData();
   formData.append("file", file);
   
-  // FIXED: Send sampling_rate as query parameter for any value
+  //Send sampling_rate as query parameter for any value
   const response = await axios.post(
     `${API_BASE_URL}/doppler/predict?sampling_rate=${sampling_rate}`, 
     formData, 

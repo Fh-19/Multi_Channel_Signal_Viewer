@@ -96,7 +96,7 @@ def play_doppler(req: DopplerRequest):
             req.speed,
             play_sound=True,
             realistic=req.realistic,
-            sampling_rate=req.sampling_rate,  # <-- applied here
+            sampling_rate=req.sampling_rate,  
         )
 
         simulation_type = "realistic car" if req.realistic else "basic"
@@ -165,7 +165,7 @@ async def predict_uploaded_file(
             tmp_path = tmpfile.name
 
         # Run model using same sampling rate from slider
-        preds = predict_doppler(tmp_path, target_sr=sampling_rate)  # <-- applied here
+        preds = predict_doppler(tmp_path, target_sr=sampling_rate)
 
         os.unlink(tmp_path)
         return JSONResponse(content={

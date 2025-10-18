@@ -16,8 +16,6 @@ function MainPage() {
           <Link to="/doppler" style={styles.button}>Doppler Shift</Link>
           <Link to="/sar" style={styles.button}>SAR Classifier</Link>
           <Link to="/voice-gender" style={styles.button}>Voice Gender Detection</Link>
-
-
         </div>
       </div>
     </div>

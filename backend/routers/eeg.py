@@ -5,7 +5,7 @@ import tempfile
 import torch
 import numpy as np
 
-from ..services.eeg_model import load_trained_model
+from ..pretrained_models.eeg_model import load_trained_model
 from ..services.eeg_processing import (
     load_raw,
     preprocess_raw,

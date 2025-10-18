@@ -13,7 +13,7 @@ def load_raw(file_path: str):
 
 def preprocess_raw(raw, highpass=0.5, resample_to=None):
     raw.load_data()
-    # Band-pass filter (e.g., 0.5-40 Hz) removes DC drift and high-freq noise
+    # Band-pass filter to remove DC drift and high-freq noise
     raw.filter(l_freq=highpass, h_freq=80.0)
     
     # remove 50 Hz (or 60 Hz) power-line noise
@@ -37,7 +37,7 @@ def standardize(data: np.ndarray) -> np.ndarray:
     scaler = StandardScaler()
     return scaler.fit_transform(data.T).T   # keep shape (channels, samples)
 
-# NEW: Function for aliasing experiment
+# Function for aliasing experiment
 def resample_raw(raw, target_fs: float):
     """
     Resample raw EEG data to target frequency for aliasing experiments.
