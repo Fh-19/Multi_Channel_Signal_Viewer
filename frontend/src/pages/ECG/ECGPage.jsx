@@ -9,7 +9,7 @@ const DEFAULT_LEAD_NAMES = [
 ];
 
 const LEAD_COLORS = [
-  "#E24A33", "#348ABD", "#988ED5", "#777777", "#FBC15E",
+  "#E24A33", "#348ABD", "#988EDP", "#777777", "#FBC15E",
   "#8EBA42", "#FFB5B8", "#FF7F0E", "#1CA876", "#B776B7", "#F8585A", "#6D8B93",
 ];
 
@@ -568,66 +568,95 @@ export default function ECGPage() {
     }
   };
 
-  const detectXorSimilarity = (newChunk, existingChunks, tolerance) => {
-    let chunksToRemove = [];
-    let newChunkIsDuplicate = false;
+  // NEW XOR IMPLEMENTATION - Improved accumulation logic
+  const processXorAccumulation = (newChunk, accumulatedResult, tolerance) => {
+    if (!accumulatedResult || accumulatedResult.length === 0) {
+      // First cycle - return as-is with all points visible
+      return newChunk.map((value, index) => ({
+        value,
+        visible: true,
+        cycle: 1,
+        index
+      }));
+    }
 
-    for (let i = 0; i < existingChunks.length; i++) {
-      if (existingChunks[i].removed) continue;
+    const result = [];
+    const minLength = Math.min(newChunk.length, accumulatedResult.length);
+
+    for (let i = 0; i < minLength; i++) {
+      const currentValue = newChunk[i];
+      const accumulatedPoint = accumulatedResult[i];
       
-      const existingChunk = existingChunks[i].samples;
-      let totalDiff = 0;
-      const minLength = Math.min(existingChunk.length, newChunk.length);
+      // Check if values are similar within tolerance
+      const isSimilar = Math.abs(currentValue - accumulatedPoint.value) <= tolerance;
       
-      for (let k = 0; k < minLength; k++) {
-        totalDiff += Math.abs(existingChunk[k] - newChunk[k]);
-      }
-      const meanDiff = totalDiff / minLength;
-      
-      if (meanDiff <= tolerance) {
-        chunksToRemove.push(i);
-        newChunkIsDuplicate = true;
+      if (isSimilar && accumulatedPoint.visible) {
+        // Similar values and previously visible → XOR result is 0 (erase/blank)
+        result.push({
+          value: currentValue,
+          visible: false,
+          cycle: accumulatedPoint.cycle + 1,
+          index: i
+        });
+      } else {
+        // Different values OR previously hidden → XOR result is 1 (keep visible)
+        result.push({
+          value: currentValue,
+          visible: true,
+          cycle: accumulatedPoint.cycle + 1,
+          index: i
+        });
       }
     }
 
-    return { chunksToRemove, newChunkIsDuplicate };
+    // Handle remaining points if new chunk is longer
+    for (let i = minLength; i < newChunk.length; i++) {
+      result.push({
+        value: newChunk[i],
+        visible: true,
+        cycle: accumulatedResult[0]?.cycle + 1 || 1,
+        index: i
+      });
+    }
+
+    return result;
   };
 
+  // Replace the existing updateXORVisualization function
   const updateXORVisualization = () => {
     const newChunk = getXorChunk(xorChannel, cycleIdxRef.current);
     
     if (newChunk && newChunk.length > 0) {
       setXorChunks((prev) => {
-        const { chunksToRemove, newChunkIsDuplicate } = detectXorSimilarity(newChunk, prev, xorTolerance);
-
-        const updatedChunks = prev.map((chunk, index) => {
-          if (chunksToRemove.includes(index)) {
-            return { ...chunk, removed: true };
-          }
-          return chunk;
-        });
-
-        let result;
-        if (newChunkIsDuplicate) {
-          result = updatedChunks;
-        } else {
-          const newChunkObj = {
-            samples: [...newChunk],
-            removed: false,
-            id: Date.now() + Math.random(),
-            channel: xorChannel,
-            cycleIndex: cycleIdxRef.current,
-          };
-          result = [...updatedChunks, newChunkObj];
-        }
-
-        const maxChunksHistory = 20;
-        if (result.length > maxChunksHistory) {
-          return result.slice(-maxChunksHistory);
-        }
-        return result;
+        // Get the accumulated XOR result from previous cycles
+        const accumulatedResult = prev.length > 0 ? prev[prev.length - 1].accumulatedXor : null;
+        
+        // Process the new cycle with XOR accumulation
+        const newAccumulatedResult = processXorAccumulation(newChunk, accumulatedResult, xorTolerance);
+        
+        // Create visualization data for this cycle
+        const cycleData = {
+          cycleIndex: cycleIdxRef.current,
+          rawSamples: [...newChunk],
+          accumulatedXor: newAccumulatedResult,
+          timestamp: Date.now(),
+          channel: xorChannel,
+        };
+        
+        // Keep limited history for performance
+        const maxHistory = 15;
+        const updatedChunks = [...prev, cycleData];
+        return updatedChunks.length > maxHistory 
+          ? updatedChunks.slice(-maxHistory)
+          : updatedChunks;
       });
     }
+  };
+
+  // Replace the existing detectXorSimilarity function
+  const detectXorSimilarity = (newChunk, existingChunks, tolerance) => {
+    // This function is now simplified since we're using accumulation approach
+    return { chunksToRemove: [], newChunkIsDuplicate: false };
   };
 
   // Handle play/pause with restart capability

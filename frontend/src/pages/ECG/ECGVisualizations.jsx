@@ -51,11 +51,12 @@ export default function ECGVisualizations({
   clearPolarTraces,
   clearRecurrenceMatrix,
   resetXorChunks,
-  // NEW: Aliasing warning and FS info
   aliasingWarning,
   displayFs,
   originalFs,
-  resamplingType
+  resamplingType,
+  xorTolerance,
+  setXorTolerance
 }) {
   const renderSelectedVisualization = () => {
     switch (selectedVisualization) {
@@ -92,6 +93,7 @@ export default function ECGVisualizations({
             xorChannel={xorChannel}
             leadNames={leadNames}
             isLoading={isLoading}
+            xorTolerance={xorTolerance}
             aliasingWarning={aliasingWarning}
             displayFs={displayFs}
           />
