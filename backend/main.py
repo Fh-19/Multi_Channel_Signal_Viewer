@@ -1,14 +1,26 @@
 # backend/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 from fastapi.staticfiles import StaticFiles
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+
 
 app = FastAPI(title="Signal Viewer Backend")
 
 origins = [
     "http://localhost:5173",
+
       "http://127.0.0.1:5173",  # Vite frontend
+
+   
+
 ]
+
 
 app.add_middleware(
     CORSMiddleware,
