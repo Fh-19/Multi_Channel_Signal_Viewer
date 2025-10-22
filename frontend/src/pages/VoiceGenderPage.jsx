@@ -8,31 +8,39 @@ import {
   LinearScale,
   CategoryScale,
   Tooltip,
+  Legend,
 } from "chart.js";
 
-ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip);
+ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);
 
 const VoiceGenderPage = () => {
   const [file, setFile] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
   const [aliasedUrl, setAliasedUrl] = useState(null);
+  const [recoveredUrl, setRecoveredUrl] = useState(null);
+
   const [result, setResult] = useState(null);
   const [aliasedResult, setAliasedResult] = useState(null);
+  const [recoveredResult, setRecoveredResult] = useState(null);
+
   const [loading, setLoading] = useState(false);
   const [freq, setFreq] = useState(8000);
 
+  // ---------------- Handle file selection ----------------
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     setFile(selectedFile);
     setResult(null);
     setAliasedResult(null);
+    setRecoveredResult(null);
+    setRecoveredUrl(null);
     setAliasedUrl(null);
     if (selectedFile) setAudioUrl(URL.createObjectURL(selectedFile));
   };
 
+  // ---------------- Upload original ----------------
   const handleUpload = async () => {
     if (!file) return alert("Please select a .wav file first!");
-
     setLoading(true);
     const formData = new FormData();
     formData.append("file", file);
@@ -43,16 +51,17 @@ const VoiceGenderPage = () => {
       });
       setResult(res.data);
       setFreq(res.data.sampling_rate / 2);
-    } catch {
+    } catch (err) {
+      console.error(err);
       alert("Error uploading file. Check backend.");
     } finally {
       setLoading(false);
     }
   };
 
+  // ---------------- Apply aliasing ----------------
   const handleAliasing = async () => {
     if (!result?.filename) return alert("Please classify the original file first!");
-
     setLoading(true);
     const formData = new FormData();
     formData.append("filename", result.filename);
@@ -62,14 +71,35 @@ const VoiceGenderPage = () => {
       const res = await axios.post("http://127.0.0.1:8000/api/voice_gender/aliasing", formData);
       setAliasedResult(res.data);
       setAliasedUrl(res.data.file_url);
-    } catch {
+    } catch (err) {
+      console.error(err);
       alert("Aliasing error. Check backend.");
     } finally {
       setLoading(false);
     }
   };
 
-  const renderSpectrum = (spectrumData, label) => {
+  // ---------------- Recover audio (Anti-alias) ----------------
+  const handleRecover = async () => {
+    if (!aliasedResult?.filename) return alert("Please apply aliasing first!");
+    setLoading(true);
+    const formData = new FormData();
+    formData.append("filename", aliasedResult.filename);
+
+    try {
+      const res = await axios.post("http://127.0.0.1:8000/api/voice_gender/recover", formData);
+      setRecoveredResult(res.data);
+      setRecoveredUrl(res.data.file_url);
+    } catch (err) {
+      console.error(err);
+      alert("Recovery error. Check backend.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------------- Render spectrum chart ----------------
+  const renderSpectrum = (spectrumData, label, color = "#2055c0") => {
     if (!spectrumData) return null;
     const data = {
       labels: spectrumData.freqs,
@@ -77,7 +107,7 @@ const VoiceGenderPage = () => {
         {
           label,
           data: spectrumData.magnitude,
-          borderColor: "#2055c0",
+          borderColor: color,
           borderWidth: 1,
           pointRadius: 0,
         },
@@ -85,24 +115,45 @@ const VoiceGenderPage = () => {
     };
     const options = {
       responsive: true,
-      scales: { x: { title: { text: "Frequency (Hz)", display: true } }, y: { display: false } },
-      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { text: "Frequency (Hz)", display: true } },
+        y: { display: false },
+      },
+      plugins: { legend: { display: true, position: "top" } },
     };
-    return <Line data={data} options={options} />;
+    return (
+      <div role="img" aria-label={`${label} frequency chart`}>
+        <Line data={data} options={options} />
+      </div>
+    );
   };
 
   return (
     <div style={styles.pageContainer}>
       <div style={styles.card}>
-        <h1 style={styles.title}>🎙️ Voice Gender Classifier + Aliasing</h1>
+        <h1 style={styles.title}>🎙️ Voice Gender Classifier + Aliasing + Recovery</h1>
 
-        <input type="file" accept=".wav" onChange={handleFileChange} />
-        {audioUrl && <audio controls src={audioUrl} style={{ width: "100%", marginTop: "10px" }} />}
+        {/* Upload section */}
+        <label htmlFor="fileUpload" style={{ display: "block", fontWeight: "600" }}>
+          Select a WAV File:
+        </label>
+        <input
+          id="fileUpload"
+          type="file"
+          accept=".wav"
+          onChange={handleFileChange}
+          style={{ marginBottom: "10px" }}
+        />
+
+        {audioUrl && (
+          <audio controls src={audioUrl} style={{ width: "100%", marginTop: "10px" }} />
+        )}
 
         <button style={styles.button} onClick={handleUpload} disabled={loading}>
           {loading ? "Processing..." : "Upload & Detect"}
         </button>
 
+        {/* Original result */}
         {result && (
           <>
             <div style={styles.resultBox}>
@@ -130,9 +181,14 @@ const VoiceGenderPage = () => {
               {renderSpectrum(result.spectrum, "Original Spectrum")}
             </div>
 
+            {/* Aliasing Control */}
             <div style={{ marginTop: "40px" }}>
               <h3>🎚️ Aliasing Control</h3>
+              <label htmlFor="freqRange" style={{ fontWeight: "600" }}>
+                Sampling Frequency:
+              </label>
               <input
+                id="freqRange"
                 type="range"
                 min="1000"
                 max={result.sampling_rate * 2}
@@ -146,6 +202,7 @@ const VoiceGenderPage = () => {
               <button
                 style={{ ...styles.button, backgroundColor: "#ff7b00" }}
                 onClick={handleAliasing}
+                disabled={loading}
               >
                 Apply Aliasing
               </button>
@@ -153,6 +210,7 @@ const VoiceGenderPage = () => {
           </>
         )}
 
+        {/* Aliased audio */}
         {aliasedUrl && (
           <>
             <audio controls src={aliasedUrl} style={{ width: "100%", marginTop: "20px" }} />
@@ -178,7 +236,53 @@ const VoiceGenderPage = () => {
 
             <div style={{ marginTop: "20px" }}>
               <h4>Frequency Spectrum (Aliased)</h4>
-              {renderSpectrum(aliasedResult.spectrum, "Aliased Spectrum")}
+              {renderSpectrum(aliasedResult.spectrum, "Aliased Spectrum", "#ff6600")}
+            </div>
+
+            <button
+              style={{ ...styles.button, backgroundColor: "#008f39", marginTop: "30px" }}
+              onClick={handleRecover}
+              disabled={loading}
+            >
+              {loading ? "Recovering..." : "🔧 Recover Original (Anti-Aliasing)"}
+            </button>
+          </>
+        )}
+
+        {/* Recovered audio */}
+        {recoveredUrl && recoveredResult && (
+          <>
+            <audio controls src={recoveredUrl} style={{ width: "100%", marginTop: "20px" }} />
+            <div style={styles.resultBox}>
+              <h3>Recovered File: {recoveredResult.filename}</h3>
+
+              {/* ✅ Display recovered sampling rate */}
+              {recoveredResult.recovered_sr && (
+                <p>Recovered SR: {recoveredResult.recovered_sr} Hz</p>
+              )}
+
+              <h2>
+                Gender After Recovery:{" "}
+                <span
+                  style={{
+                    color:
+                      recoveredResult.gender === "Male"
+                        ? "blue"
+                        : recoveredResult.gender === "Female"
+                        ? "deeppink"
+                        : "gray",
+                  }}
+                >
+                  {recoveredResult.gender}
+                </span>
+              </h2>
+            </div>
+
+            {/* Display both before & after recovery */}
+            <div style={{ marginTop: "20px" }}>
+              <h4>🔍 Frequency Spectrum Comparison (Before vs After Recovery)</h4>
+              {renderSpectrum(recoveredResult.spectrum_before, "Before Recovery", "#ff4444")}
+              {renderSpectrum(recoveredResult.spectrum_after, "After Recovery", "#00aa33")}
             </div>
           </>
         )}
@@ -187,6 +291,7 @@ const VoiceGenderPage = () => {
   );
 };
 
+// ---------------- STYLES ----------------
 const styles = {
   pageContainer: {
     minHeight: "100vh",

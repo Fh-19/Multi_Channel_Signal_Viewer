@@ -6,12 +6,14 @@ from fastapi.staticfiles import StaticFiles
 app = FastAPI(title="Signal Viewer Backend")
 
 origins = [
-    "http://localhost:5173",  # Vite frontend
+    "http://localhost:5173",
+      "http://127.0.0.1:5173",  # Vite frontend
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # or origins list if you want to restrict
+    allow_origins=origins,  # or origins list if you want to restrict
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
