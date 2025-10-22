@@ -2,7 +2,7 @@ import { useMemo, useEffect } from "react";
 import Plot from "react-plotly.js";
 import { predictEegFile } from "../../services/eegService";
 
-const DISEASE_COLORS = {
+export const colorPalette = {
   "Alzheimer": "#E24A33",
   "Dementia": "#348ABD", 
   "Epilepsy": "#988ED5",
@@ -134,7 +134,7 @@ export default function EEGAnalysis({
             type: "bar",
             orientation: "h",
             marker: {
-              color: diseases.map(d => DISEASE_COLORS[d] || "#3498db"),
+              color: diseases.map(d => colorPalette[d] || "#3498db"),
               line: { color: "#2c3e50", width: 1 },
             },
             text: values.map(v => v.toFixed(1) + "%"),
@@ -213,7 +213,7 @@ export default function EEGAnalysis({
               <p style={{ 
                 fontSize: "16px", 
                 fontWeight: "bold", 
-                color: DISEASE_COLORS[prediction] || "#2055c0", 
+                color: colorPalette[prediction] || "#2055c0", 
                 margin: 0 
               }}>
                 {prediction}
@@ -236,7 +236,7 @@ export default function EEGAnalysis({
             <p style={{ 
               fontSize: "16px", 
               fontWeight: "bold", 
-              color: DISEASE_COLORS[prediction] || "#2055c0", 
+              color: colorPalette[prediction] || "#2055c0", 
               margin: 0 
             }}>
               {prediction}

@@ -1,13 +1,6 @@
 import Plot from "react-plotly.js";
 import { useMemo } from "react";
-
-const colorPalette = {
-  Alzheimer: "#FF6B6B",
-  Dementia: "#FFD93D",
-  Epilepsy: "#6BCB77",
-  Healthy: "#4D96FF",
-  Schizophrenia: "#845EC2",
-};
+import { colorPalette } from "../EEGAnalysis";
 
 export default function EEGSignalGraphs({ channels, buffer, time, fs, windowSeconds, isLoading, experimentalFs, originalFs }) {
   

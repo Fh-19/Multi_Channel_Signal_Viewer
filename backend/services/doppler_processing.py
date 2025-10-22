@@ -101,12 +101,12 @@ def DopplerShift(frequency, speed, play_sound=False, realistic=True, sampling_ra
             velocity=speed,
             base_freq=frequency, 
             duration=8.0, 
-            sr=sampling_rate  # NEW: Use provided sampling rate
+            sr=sampling_rate  # Use provided sampling rate
         )
     else:
         # Fallback to simple Doppler for comparison with specified sampling rate
         v_sound = 343
-        sample_rate = sampling_rate  # NEW: Use provided sampling rate
+        sample_rate = sampling_rate  # Use provided sampling rate
         duration = 6
         t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
         

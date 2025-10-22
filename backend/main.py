@@ -2,6 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+from fastapi.staticfiles import StaticFiles
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,6 +24,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Include existing routers
 from backend.routers import ecg, eeg, api, raddar, doppler, sar_classifier, voice_gender
@@ -34,6 +36,7 @@ app.include_router(raddar.router, prefix="/api/radar")
 app.include_router(doppler.router, prefix="/api/doppler") 
 app.include_router(sar_classifier.router, prefix="/api/sar")
 app.include_router(voice_gender.router, prefix="/api/voice_gender") 
+
 @app.get("/")
 def root():
     return {"message": "Signal Viewer Backend - Ready"}
