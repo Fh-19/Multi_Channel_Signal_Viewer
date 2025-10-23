@@ -36,4 +36,4 @@ np.save(os.path.join(OUTPUT_DIR, "y_train.npy"), y_train)
 
 
 
-print("✅ Features saved in", OUTPUT_DIR)
+print(" Features saved in", OUTPUT_DIR)

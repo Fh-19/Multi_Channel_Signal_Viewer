@@ -22,6 +22,9 @@ const VoiceGenderPage = () => {
   const [result, setResult] = useState(null);
   const [aliasedResult, setAliasedResult] = useState(null);
   const [recoveredResult, setRecoveredResult] = useState(null);
+  
+  // Store the original aliased spectrum separately
+  const [originalAliasedSpectrum, setOriginalAliasedSpectrum] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [freq, setFreq] = useState(8000);
@@ -34,6 +37,7 @@ const VoiceGenderPage = () => {
     setRecoveredResult(null);
     setRecoveredUrl(null);
     setAliasedUrl(null);
+    setOriginalAliasedSpectrum(null); // Reset the stored spectrum
     if (selectedFile) setAudioUrl(URL.createObjectURL(selectedFile));
   };
 
@@ -68,6 +72,8 @@ const VoiceGenderPage = () => {
       const res = await axios.post("http://127.0.0.1:8000/api/voice_gender/aliasing", formData);
       setAliasedResult(res.data);
       setAliasedUrl(res.data.file_url);
+      // Store the aliased spectrum for later comparison
+      setOriginalAliasedSpectrum(res.data.spectrum);
     } catch (err) {
       console.error(err);
       alert("Aliasing error. Check backend.");
@@ -110,6 +116,53 @@ const VoiceGenderPage = () => {
       },
       plugins: { legend: { display: true, position: "top" } },
     };
+    return <Line data={data} options={options} />;
+  };
+
+  // New function to render comparison spectrum
+  const renderComparisonSpectrum = () => {
+    if (!originalAliasedSpectrum || !recoveredResult?.spectrum_after) return null;
+    
+    const data = {
+      labels: originalAliasedSpectrum.freqs,
+      datasets: [
+        { 
+          label: "Aliased (Before Recovery)", 
+          data: originalAliasedSpectrum.magnitude, 
+          borderColor: "#ff4444", 
+          borderWidth: 2, 
+          pointRadius: 0 
+        },
+        { 
+          label: "After Recovery", 
+          data: recoveredResult.spectrum_after.magnitude, 
+          borderColor: "#00aa33", 
+          borderWidth: 2, 
+          pointRadius: 0 
+        },
+      ],
+    };
+    
+    const options = {
+      responsive: true,
+      scales: {
+        x: { title: { text: "Frequency (Hz)", display: true } },
+        y: { 
+          title: { text: "Magnitude", display: true },
+          beginAtZero: true
+        },
+      },
+      plugins: { 
+        legend: { 
+          display: true, 
+          position: "top",
+          labels: {
+            usePointStyle: true,
+          }
+        } 
+      },
+    };
+    
     return <Line data={data} options={options} />;
   };
 
@@ -214,9 +267,27 @@ const VoiceGenderPage = () => {
             </div>
 
             <div style={{ marginTop: "20px" }}>
-              <h4>Frequency Spectrum Comparison (Before vs After Recovery)</h4>
-              {renderSpectrum(recoveredResult.spectrum_before, "Before Recovery", "#ff4444")}
-              {renderSpectrum(recoveredResult.spectrum_after, "After Recovery", "#00aa33")}
+              <h4>Frequency Spectrum Comparison (Aliased vs Recovered)</h4>
+              <p style={{ fontSize: "14px", color: "#666", marginBottom: "20px" }}>
+                <span style={{ color: "#ff4444", fontWeight: "bold" }}>Red:</span> Original Aliased Spectrum • 
+                <span style={{ color: "#00aa33", fontWeight: "bold" }}> Green:</span> After Anti-Aliasing Recovery
+              </p>
+              {renderComparisonSpectrum()}
+              
+              {/* Individual spectra for detailed inspection */}
+              <div style={{ marginTop: "40px" }}>
+                <h4>Individual Spectra</h4>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "15px" }}>
+                  <div>
+                    <h5 style={{ color: "#ff4444" }}>Aliased Spectrum</h5>
+                    {renderSpectrum(originalAliasedSpectrum, "Aliased", "#ff4444")}
+                  </div>
+                  <div>
+                    <h5 style={{ color: "#00aa33" }}>Recovered Spectrum</h5>
+                    {renderSpectrum(recoveredResult.spectrum_after, "Recovered", "#00aa33")}
+                  </div>
+                </div>
+              </div>
             </div>
           </>
         )}
@@ -226,11 +297,49 @@ const VoiceGenderPage = () => {
 };
 
 const styles = {
-  pageContainer: { minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center", background: "#f0f4f8" },
-  card: { background: "#fff", borderRadius: "20px", boxShadow: "0 10px 30px rgba(0,0,0,0.1)", padding: "40px", textAlign: "center", maxWidth: "700px", width: "90%" },
-  title: { fontSize: "26px", marginBottom: "10px", color: "#001f3f" },
-  button: { marginTop: "15px", padding: "10px 20px", backgroundColor: "#2055c0", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600" },
-  resultBox: { marginTop: "20px", background: "#f9f9f9", padding: "15px", borderRadius: "10px", border: "1px solid #ddd" },
+  pageContainer: { 
+    minHeight: "100vh", 
+    display: "flex", 
+    justifyContent: "center", 
+    alignItems: "center", 
+    background: "#f0f4f8",
+    padding: "20px 0" 
+  },
+  card: { 
+    background: "#fff", 
+    borderRadius: "20px", 
+    boxShadow: "0 10px 30px rgba(0,0,0,0.1)", 
+    padding: "40px", 
+    textAlign: "center", 
+    maxWidth: "900px", 
+    width: "90%" 
+  },
+  title: { 
+    fontSize: "26px", 
+    marginBottom: "10px", 
+    color: "#001f3f" 
+  },
+  button: { 
+    marginTop: "15px", 
+    padding: "10px 20px", 
+    backgroundColor: "#2055c0", 
+    color: "white", 
+    border: "none", 
+    borderRadius: "8px", 
+    cursor: "pointer", 
+    fontWeight: "600",
+    transition: "background-color 0.2s",
+    ":hover": {
+      backgroundColor: "#1640a0"
+    }
+  },
+  resultBox: { 
+    marginTop: "20px", 
+    background: "#f9f9f9", 
+    padding: "15px", 
+    borderRadius: "10px", 
+    border: "1px solid #ddd" 
+  },
 };
 
 export default VoiceGenderPage;
