@@ -58,6 +58,8 @@ async def predict_voice_gender(file: UploadFile = File(...)):
     except Exception as e:
         print(f">>> ERROR in predict_voice_gender: {e}")
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+    
+    
 # ---------------- 2. Aliasing effect ----------------
 @router.post("/aliasing")
 async def aliasing_effect(filename: str = Form(...), new_sr: int = Form(...)):
@@ -74,8 +76,25 @@ async def aliasing_effect(filename: str = Form(...), new_sr: int = Form(...)):
             new_sr = max_sr
             print(f">>> new_sr too high, automatically reduced to {new_sr} Hz for aliasing")
 
-        waveform_down = librosa.resample(waveform, orig_sr=sr, target_sr=new_sr)
-        aliased_waveform = librosa.resample(waveform_down, orig_sr=new_sr, target_sr=sr)
+        # Manual downsampling and upsampling without librosa
+        # Step 1: Downsample (decimate)
+        downsample_ratio = sr / new_sr
+        if downsample_ratio <= 1:
+            # If target sample rate is higher or equal, just use original
+            waveform_down = waveform
+        else:
+            # Manual downsampling by taking every nth sample
+            indices = np.round(np.arange(0, len(waveform), downsample_ratio)).astype(int)
+            indices = indices[indices < len(waveform)]  # Ensure we don't go out of bounds
+            waveform_down = waveform[indices]
+        
+        # Step 2: Upsample back to original sample rate (with interpolation)
+        # First, create the time arrays for both original and downsampled signals
+        t_original = np.arange(len(waveform)) / sr
+        t_downsampled = np.arange(len(waveform_down)) / new_sr
+        
+        # Use linear interpolation to resample back to original rate
+        aliased_waveform = np.interp(t_original, t_downsampled, waveform_down)
 
         aliased_filename = f"aliased_{new_sr}_{filename}"
         aliased_path = os.path.join(UPLOAD_FOLDER, aliased_filename)
@@ -102,7 +121,7 @@ async def aliasing_effect(filename: str = Form(...), new_sr: int = Form(...)):
     except Exception as e:
         print(f">>> ERROR in aliasing_effect: {e}")
         raise HTTPException(status_code=500, detail=f"Aliasing processing failed: {str(e)}")
-
+    
 # ---------------- 3. Anti-aliasing recovery ----------------
 @router.post("/recover")
 async def recover_with_dsp(filename: str = Form(...)):
@@ -110,10 +129,6 @@ async def recover_with_dsp(filename: str = Form(...)):
         file_path = os.path.join(UPLOAD_FOLDER, filename)
         if not os.path.exists(file_path):
             return {"error": "File not found!"}
-
-
-
-        print(f" DSP Recovery running for: {filename}")
 
         waveform, sr = librosa.load(file_path, sr=None, mono=True)
 
@@ -157,11 +172,6 @@ async def recover_with_dsp(filename: str = Form(...)):
         freqs_after = np.fft.fftfreq(len(fft_after), 1 / sr)
         magnitude_after = np.abs(fft_after)[: len(freqs_after)//2]
         freqs_after = freqs_after[: len(freqs_after)//2]
-
-
-
-        print(" Enhanced DSP Recovery completed successfully")
-
 
         return {
             "filename": recovered_filename,

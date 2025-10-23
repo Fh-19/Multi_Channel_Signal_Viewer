@@ -9,9 +9,10 @@ import {
   CategoryScale,
   Tooltip,
   Legend,
+  Title
 } from "chart.js";
 
-ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);
+ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend, Title);
 
 const VoiceGenderPage = () => {
   const [file, setFile] = useState(null);
@@ -37,7 +38,7 @@ const VoiceGenderPage = () => {
     setRecoveredResult(null);
     setRecoveredUrl(null);
     setAliasedUrl(null);
-    setOriginalAliasedSpectrum(null); // Reset the stored spectrum
+    setOriginalAliasedSpectrum(null);
     if (selectedFile) setAudioUrl(URL.createObjectURL(selectedFile));
   };
 
@@ -72,7 +73,6 @@ const VoiceGenderPage = () => {
       const res = await axios.post("http://127.0.0.1:8000/api/voice_gender/aliasing", formData);
       setAliasedResult(res.data);
       setAliasedUrl(res.data.file_url);
-      // Store the aliased spectrum for later comparison
       setOriginalAliasedSpectrum(res.data.spectrum);
     } catch (err) {
       console.error(err);
@@ -100,56 +100,100 @@ const VoiceGenderPage = () => {
     }
   };
 
-  const renderSpectrum = (spectrumData, label, color = "#2055c0") => {
-    if (!spectrumData) return null;
-    const data = {
-      labels: spectrumData.freqs,
-      datasets: [
-        { label, data: spectrumData.magnitude, borderColor: color, borderWidth: 1, pointRadius: 0 },
-      ],
-    };
-    const options = {
-      responsive: true,
-      scales: {
-        x: { title: { text: "Frequency (Hz)", display: true } },
-        y: { display: false },
-      },
-      plugins: { legend: { display: true, position: "top" } },
-    };
-    return <Line data={data} options={options} />;
+  // Helper function to get accurate frequency spectrum data
+  const getAccurateSpectrumData = (spectrumData, maxFrequency = null) => {
+    if (!spectrumData || !spectrumData.freqs || !spectrumData.magnitude) return null;
+    
+    // For frequency spectrum, we don't use time windows
+    // Instead, we focus on meaningful frequency ranges
+    let freqs = spectrumData.freqs;
+    let magnitude = spectrumData.magnitude;
+    
+    // If maxFrequency is specified, filter to show only up to that frequency
+    if (maxFrequency && freqs.length > 0) {
+      const lastIndex = freqs.findIndex(freq => freq > maxFrequency);
+      const cutoffIndex = lastIndex === -1 ? freqs.length : lastIndex;
+      
+      freqs = freqs.slice(0, cutoffIndex);
+      magnitude = magnitude.slice(0, cutoffIndex);
+    }
+    
+    // Reduce data density for better performance while maintaining accuracy
+    // Keep more points in lower frequencies where detail matters
+    const reductionFactor = Math.max(1, Math.floor(freqs.length / 1000));
+    if (reductionFactor > 1) {
+      const reducedFreqs = [];
+      const reducedMagnitude = [];
+      
+      for (let i = 0; i < freqs.length; i += reductionFactor) {
+        reducedFreqs.push(Math.round(freqs[i] * 100) / 100); // Keep 2 decimal places for frequencies
+        reducedMagnitude.push(Math.round(magnitude[i]));
+      }
+      
+      freqs = reducedFreqs;
+      magnitude = reducedMagnitude;
+    }
+    
+    return { freqs, magnitude };
   };
 
-  // New function to render comparison spectrum
-  const renderComparisonSpectrum = () => {
-    if (!originalAliasedSpectrum || !recoveredResult?.spectrum_after) return null;
+  const renderSpectrum = (spectrumData, label, color = "#2055c0", maxFrequency = 5000) => {
+    if (!spectrumData) return null;
     
+    const accurateData = getAccurateSpectrumData(spectrumData, maxFrequency);
+    if (!accurateData) return null;
+
     const data = {
-      labels: originalAliasedSpectrum.freqs,
+      labels: accurateData.freqs,
       datasets: [
         { 
-          label: "Aliased (Before Recovery)", 
-          data: originalAliasedSpectrum.magnitude, 
-          borderColor: "#ff4444", 
-          borderWidth: 2, 
-          pointRadius: 0 
-        },
-        { 
-          label: "After Recovery", 
-          data: recoveredResult.spectrum_after.magnitude, 
-          borderColor: "#00aa33", 
-          borderWidth: 2, 
-          pointRadius: 0 
+          label, 
+          data: accurateData.magnitude, 
+          borderColor: color, 
+          borderWidth: 1.5, 
+          pointRadius: 0,
+          tension: 0.1 // Smooth lines
         },
       ],
     };
     
     const options = {
       responsive: true,
+      maintainAspectRatio: false,
       scales: {
-        x: { title: { text: "Frequency (Hz)", display: true } },
+        x: { 
+          title: { 
+            text: "Frequency (Hz)", 
+            display: true,
+            font: { weight: 'bold' }
+          },
+          type: 'linear',
+          ticks: {
+            callback: function(value) {
+              return value % 1000 === 0 ? value + 'Hz' : '';
+            },
+            autoSkip: true,
+            maxTicksLimit: 10
+          },
+          grid: {
+            color: 'rgba(0,0,0,0.1)'
+          }
+        },
         y: { 
-          title: { text: "Magnitude", display: true },
-          beginAtZero: true
+          title: { 
+            text: "Magnitude", 
+            display: true,
+            font: { weight: 'bold' }
+          },
+          beginAtZero: true,
+          ticks: {
+            callback: function(value) {
+              return Math.round(value);
+            }
+          },
+          grid: {
+            color: 'rgba(0,0,0,0.1)'
+          }
         },
       },
       plugins: { 
@@ -158,12 +202,148 @@ const VoiceGenderPage = () => {
           position: "top",
           labels: {
             usePointStyle: true,
+            padding: 20,
+            font: { size: 12 }
           }
-        } 
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            label: function(context) {
+              return `${context.dataset.label}: ${Math.round(context.parsed.y)} @ ${context.parsed.x.toFixed(1)}Hz`;
+            }
+          }
+        },
+        title: {
+          display: true,
+          text: `Frequency Spectrum - ${label}`,
+          font: { size: 16, weight: 'bold' },
+          padding: { bottom: 20 }
+        }
       },
+      interaction: {
+        mode: 'nearest',
+        axis: 'x',
+        intersect: false
+      }
     };
     
-    return <Line data={data} options={options} />;
+    return (
+      <div style={{ height: '400px', marginBottom: '30px' }}>
+        <Line data={data} options={options} />
+      </div>
+    );
+  };
+
+  // New function to render comparison spectrum
+  const renderComparisonSpectrum = () => {
+    if (!originalAliasedSpectrum || !recoveredResult?.spectrum_after) return null;
+    
+    const aliasedData = getAccurateSpectrumData(originalAliasedSpectrum, 5000);
+    const recoveredData = getAccurateSpectrumData(recoveredResult.spectrum_after, 5000);
+    
+    if (!aliasedData || !recoveredData) return null;
+
+    const data = {
+      labels: aliasedData.freqs,
+      datasets: [
+        { 
+          label: "Aliased (Before Recovery)", 
+          data: aliasedData.magnitude, 
+          borderColor: "#ff4444", 
+          borderWidth: 2, 
+          pointRadius: 0,
+          tension: 0.1
+        },
+        { 
+          label: "After Recovery", 
+          data: recoveredData.magnitude, 
+          borderColor: "#00aa33", 
+          borderWidth: 2, 
+          pointRadius: 0,
+          tension: 0.1
+        },
+      ],
+    };
+    
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { 
+          title: { 
+            text: "Frequency (Hz)", 
+            display: true,
+            font: { weight: 'bold' }
+          },
+          type: 'linear',
+          ticks: {
+            callback: function(value) {
+              return value % 1000 === 0 ? value + 'Hz' : '';
+            },
+            autoSkip: true,
+            maxTicksLimit: 10
+          },
+          grid: {
+            color: 'rgba(0,0,0,0.1)'
+          }
+        },
+        y: { 
+          title: { 
+            text: "Magnitude", 
+            display: true,
+            font: { weight: 'bold' }
+          },
+          beginAtZero: true,
+          ticks: {
+            callback: function(value) {
+              return Math.round(value);
+            }
+          },
+          grid: {
+            color: 'rgba(0,0,0,0.1)'
+          }
+        },
+      },
+      plugins: { 
+        legend: { 
+          display: true, 
+          position: "top",
+          labels: {
+            usePointStyle: true,
+            padding: 20,
+            font: { size: 12 }
+          }
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            label: function(context) {
+              return `${context.dataset.label}: ${Math.round(context.parsed.y)} @ ${context.parsed.x.toFixed(1)}Hz`;
+            }
+          }
+        },
+        title: {
+          display: true,
+          text: "Frequency Spectrum Comparison - Aliased vs Recovered",
+          font: { size: 16, weight: 'bold' },
+          padding: { bottom: 20 }
+        }
+      },
+      interaction: {
+        mode: 'nearest',
+        axis: 'x',
+        intersect: false
+      }
+    };
+    
+    return (
+      <div style={{ height: '450px', marginBottom: '30px' }}>
+        <Line data={data} options={options} />
+      </div>
+    );
   };
 
   return (
@@ -199,8 +379,8 @@ const VoiceGenderPage = () => {
             </div>
 
             <div style={{ marginTop: "20px" }}>
-              <h4>Frequency Spectrum (Original)</h4>
-              {renderSpectrum(result.spectrum, "Original Spectrum")}
+              <h4>Frequency Spectrum (Original) - 0-5kHz Range</h4>
+              {renderSpectrum(result.spectrum, "Original Spectrum", "#2055c0", 5000)}
             </div>
 
             <div style={{ marginTop: "40px" }}>
@@ -242,8 +422,8 @@ const VoiceGenderPage = () => {
             </div>
 
             <div style={{ marginTop: "20px" }}>
-              <h4>Frequency Spectrum (Aliased)</h4>
-              {renderSpectrum(aliasedResult.spectrum, "Aliased Spectrum", "#ff6600")}
+              <h4>Frequency Spectrum (Aliased) - 0-5kHz Range</h4>
+              {renderSpectrum(aliasedResult.spectrum, "Aliased Spectrum", "#ff6600", 5000)}
             </div>
 
             <button style={{ ...styles.button, backgroundColor: "#008f39", marginTop: "30px" }} onClick={handleRecover} disabled={loading}>
@@ -276,15 +456,15 @@ const VoiceGenderPage = () => {
               
               {/* Individual spectra for detailed inspection */}
               <div style={{ marginTop: "40px" }}>
-                <h4>Individual Spectra</h4>
+                <h4>Individual Spectra - 0-5kHz Range</h4>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "15px" }}>
                   <div>
                     <h5 style={{ color: "#ff4444" }}>Aliased Spectrum</h5>
-                    {renderSpectrum(originalAliasedSpectrum, "Aliased", "#ff4444")}
+                    {renderSpectrum(originalAliasedSpectrum, "Aliased", "#ff4444", 5000)}
                   </div>
                   <div>
                     <h5 style={{ color: "#00aa33" }}>Recovered Spectrum</h5>
-                    {renderSpectrum(recoveredResult.spectrum_after, "Recovered", "#00aa33")}
+                    {renderSpectrum(recoveredResult.spectrum_after, "Recovered", "#00aa33", 5000)}
                   </div>
                 </div>
               </div>
@@ -311,8 +491,8 @@ const styles = {
     boxShadow: "0 10px 30px rgba(0,0,0,0.1)", 
     padding: "40px", 
     textAlign: "center", 
-    maxWidth: "900px", 
-    width: "90%" 
+    maxWidth: "1200px", 
+    width: "95%" 
   },
   title: { 
     fontSize: "26px", 
@@ -329,9 +509,6 @@ const styles = {
     cursor: "pointer", 
     fontWeight: "600",
     transition: "background-color 0.2s",
-    ":hover": {
-      backgroundColor: "#1640a0"
-    }
   },
   resultBox: { 
     marginTop: "20px", 
