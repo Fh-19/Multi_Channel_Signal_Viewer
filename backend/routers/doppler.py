@@ -1,12 +1,11 @@
-# backend/routers/doppler.py
-
 from fastapi import APIRouter, File, UploadFile, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
-import numpy as np
 import os
 from typing import Optional
 import tempfile, os, soundfile as sf
+import wave
+import io
 from backend.services.doppler_processing import DopplerShift
 from backend.pretrained_models.doppler_predict import predict_doppler
 
@@ -57,7 +56,7 @@ def generate_doppler(req: DopplerRequest):
             req.speed,
             play_sound=False,
             realistic=req.realistic,
-            sampling_rate=req.sampling_rate,  # <-- applied here
+            sampling_rate=req.sampling_rate, 
         )
 
         # Save to temporary WAV file
@@ -126,8 +125,6 @@ async def upload_file(file: UploadFile = File(...)):
         file_size = len(content)
 
         # Extract sample rate
-        import wave
-        import io
         wav_file = wave.open(io.BytesIO(content), 'rb')
         file_sample_rate = wav_file.getframerate()
         wav_file.close()

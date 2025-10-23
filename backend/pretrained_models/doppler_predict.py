@@ -1,5 +1,3 @@
-# backend/pretrained_models/doppler_predict.py
-
 import torch
 import torch.nn as nn
 import librosa
@@ -62,7 +60,7 @@ target_mean = checkpoint["target_mean"]
 target_std = checkpoint["target_std"]
 
 # -------------------------------
-# Updated prediction function with flexible sampling rate support
+# prediction function with flexible sampling rate support
 # -------------------------------
 def predict_doppler(file_path: str, target_sr: int = 22050):
     """
@@ -85,10 +83,12 @@ def predict_doppler(file_path: str, target_sr: int = 22050):
         else:
             mel_db = mel_db[:, :max_frames]
 
+        # Convert to tensor and predict
         mel_tensor = torch.tensor(mel_db, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device)
         with torch.no_grad():
             pred_norm = model(mel_tensor).cpu().numpy().squeeze()
 
+        # Denormalize predictions
         pred = pred_norm * target_std + target_mean
         speed_pred, freq_pred = pred.tolist()
         return {"pred_speed_kmh": float(speed_pred), "pred_freq_hz": float(freq_pred)}

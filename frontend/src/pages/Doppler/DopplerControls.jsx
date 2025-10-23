@@ -15,7 +15,8 @@ export default function DopplerControls({
   playing,
   setPlaying,
   setError,
-}) {
+})
+ {
   // Handle simulation playback
   const handlePlay = async () => {
     setError(null);
@@ -92,7 +93,7 @@ export default function DopplerControls({
         </div>
       </div>
 
-      {/* UPDATED: Continuous Sampling Rate Control */}
+      {/* Continuous Sampling Rate Control */}
       <div
         style={{
           background: "#fff",
@@ -110,7 +111,7 @@ export default function DopplerControls({
               type="range"
               min="1600"
               max="44100"
-              step="100"  // Changed to 100Hz steps for smooth control
+              step="100"  
               value={samplingRate}
               onChange={(e) => setSamplingRate(Number(e.target.value))}
               style={{
@@ -221,7 +222,7 @@ export default function DopplerControls({
               fontWeight: 600,
             }}
           >
-            {playing ? "🔊 Playing..." : "▶ Hear Simulation"}
+            {playing ? "Playing..." : "Hear Simulation"}
           </button>
           <button
             onClick={handleGenerate}

@@ -7,8 +7,8 @@ export default function DopplerVisualization({
   audioUrl, 
   playingUploaded, 
   setPlayingUploaded,
-  samplingRate, // NEW: Receive sampling rate
-  uploadStatus, // NEW: Receive upload status for file info
+  samplingRate, 
+  uploadStatus,
 }) {
   // Clean up audio URL when component unmounts
   useEffect(() => {
@@ -55,7 +55,7 @@ export default function DopplerVisualization({
         Uploaded Audio Waveform
       </h2>
 
-      {/* NEW: Display sampling rate information */}
+      {/* Display sampling rate information */}
       <div style={{ 
         marginBottom: 20, 
         padding: "12px", 
@@ -140,7 +140,7 @@ export default function DopplerVisualization({
           <p style={{ color: "#333" }}>
             <b>Frequency:</b> {prediction.pred_freq_hz.toFixed(2)} Hz
           </p>
-          {/* NEW: Display sampling rate used for prediction */}
+          {/* Display sampling rate used for prediction */}
           {prediction.sampling_rate_used && (
             <p style={{ color: "#333", fontSize: "14px" }}>
               <b>Processing Sample Rate:</b> {prediction.sampling_rate_used} Hz

@@ -7,19 +7,18 @@ export default function DopplerUpload({
   setError,
   setWaveform,
   setAudioUrl,
-  setPlayingUploaded,
   loading,
   uploadStatus,
   error,
-  audioUrl,
-  playingUploaded,
-  samplingRate, // NEW: Receive sampling rate for prediction
-}) {
+  samplingRate, 
+}) 
+{
   // Upload and auto-predict file
   const handleFileUpload = async (e) => {
     setError(null);
     const file = e.target.files[0];
     if (!file) return;
+  // Validation
     if (!file.name.toLowerCase().endsWith(".wav")) {
       setError("Please upload a WAV file");
       return;
@@ -27,53 +26,35 @@ export default function DopplerUpload({
 
     setLoading(true);
     try {
+    // Step 1: Upload file and get metadata
       const result = await uploadDopplerFile(file);
       setUploadStatus({ ...result, filename: file.name });
 
-      // Create URL for audio playback
+    // Step 2: Create audio URL for playback
       const url = URL.createObjectURL(file);
       setAudioUrl(url);
 
-      // Auto-run prediction with current sampling rate
+    // Step 3: Run ML prediction with current sampling rate
       const pred = await predictDopplerFile(file, samplingRate); // NEW: Pass sampling rate
       setPrediction(pred);
 
-      // Visualize waveform
+    // Step 4: Generate waveform visualization
       const arrayBuffer = await file.arrayBuffer();
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
       const channelData = audioBuffer.getChannelData(0);
+
+    // Downsample for efficient visualization (1000 points)
       const sampleStep = Math.floor(channelData.length / 1000);
       const waveformData = channelData.filter((_, i) => i % sampleStep === 0);
       setWaveform(waveformData);
+
     } catch (err) {
       setError(err.message || "Failed to upload/predict");
     } finally {
       setLoading(false);
-      e.target.value = "";
+      e.target.value = ""; // Reset file input
     }
-  };
-
-  // Play uploaded audio
-  const handlePlayUploaded = () => {
-    if (!audioUrl) return;
-    
-    setPlayingUploaded(true);
-    const audio = new Audio(audioUrl);
-    
-    audio.onended = () => {
-      setPlayingUploaded(false);
-    };
-    
-    audio.onerror = () => {
-      setError("Failed to play uploaded audio");
-      setPlayingUploaded(false);
-    };
-    
-    audio.play().catch(err => {
-      setError("Failed to play audio: " + err.message);
-      setPlayingUploaded(false);
-    });
   };
 
   return (
@@ -100,7 +81,7 @@ export default function DopplerUpload({
         }}
       />
       
-      {/* NEW: Display current prediction sampling rate */}
+      {/* Display current prediction sampling rate */}
       <p style={{ fontSize: "12px", color: "#666", marginBottom: 10 }}>
         Prediction will use sample rate: <b>{samplingRate} Hz</b>
       </p>
@@ -124,9 +105,9 @@ export default function DopplerUpload({
               fontWeight: 500,
             }}
           >
-            ✅ Upload complete: <b>{uploadStatus.filename}</b>
+             Upload complete: <b>{uploadStatus.filename}</b>
           </p>
-          {/* NEW: Display actual file sample rate */}
+          {/* Display actual file sample rate */}
           {uploadStatus.sampling_rate && (
             <p style={{ fontSize: "12px", color: "#666", marginTop: 5 }}>
               File sample rate: <b>{uploadStatus.sampling_rate} Hz</b>

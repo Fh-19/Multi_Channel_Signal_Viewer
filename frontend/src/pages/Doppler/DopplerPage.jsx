@@ -55,8 +55,8 @@ export default function DopplerPage() {
           setFrequency={setFrequency}
           speed={speed}
           setSpeed={setSpeed}
-          samplingRate={samplingRate} // NEW: Pass sampling rate
-          setSamplingRate={setSamplingRate} // NEW: Pass setter
+          samplingRate={samplingRate} 
+          setSamplingRate={setSamplingRate} 
           playing={playing}
           setPlaying={setPlaying}
           setError={setError}
@@ -75,7 +75,7 @@ export default function DopplerPage() {
           error={error}
           audioUrl={audioUrl}
           playingUploaded={playingUploaded}
-          samplingRate={samplingRate} // NEW: Pass sampling rate for prediction
+          samplingRate={samplingRate} 
         />
       </div>
 
@@ -86,8 +86,8 @@ export default function DopplerPage() {
         audioUrl={audioUrl}
         playingUploaded={playingUploaded}
         setPlayingUploaded={setPlayingUploaded}
-        samplingRate={samplingRate} // NEW: Pass sampling rate for display
-        uploadStatus={uploadStatus} // NEW: Pass upload status for actual file sample rate
+        samplingRate={samplingRate} 
+        uploadStatus={uploadStatus} 
       />
     </div>
   );

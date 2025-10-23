@@ -1,10 +1,7 @@
-# backend/services/doppler_processing.py
-
 import numpy as np
 import soundfile as sf
 import sounddevice as sd
 from scipy.signal import butter, filtfilt, iirpeak, fftconvolve
-import librosa  # NEW: For resampling if needed
 
 def realistic_car_passby(velocity=30.0, base_freq=300.0, duration=8.0, sr=22050):
     """
@@ -29,7 +26,7 @@ def realistic_car_passby(velocity=30.0, base_freq=300.0, duration=8.0, sr=22050)
     inst_freq = base_inst_freq * jitter
     inst_phase = np.cumsum(2*np.pi*inst_freq*dt)
 
-    # Engine harmonics (simpler version for web app)
+    # Engine harmonics
     orders = [1, 2, 3, 4]
     amps   = [1.0, 0.5, 0.3, 0.15]
     harmonics = sum(a*np.sin(k*inst_phase) for k, a in zip(orders, amps))
@@ -89,7 +86,7 @@ def realistic_car_passby(velocity=30.0, base_freq=300.0, duration=8.0, sr=22050)
     
     return mono_signal, sr, base_freq
 
-def DopplerShift(frequency, speed, play_sound=False, realistic=True, sampling_rate=22050):  # NEW: Added sampling_rate parameter
+def DopplerShift(frequency, speed, play_sound=False, realistic=True, sampling_rate=22050):  
     """
     Generate Doppler shift - now with realistic car simulation option
     speed: in km/h
