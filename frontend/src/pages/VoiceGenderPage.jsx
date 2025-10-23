@@ -48,7 +48,7 @@ const VoiceGenderPage = () => {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setResult(res.data);
-      setFreq(Math.floor(res.data.sampling_rate / 4)); // default slider below Nyquist
+      setFreq(Math.floor(res.data.sampling_rate / 4));
     } catch (err) {
       console.error(err);
       alert("Error uploading file. Check backend.");
@@ -193,17 +193,8 @@ const VoiceGenderPage = () => {
               {renderSpectrum(aliasedResult.spectrum, "Aliased Spectrum", "#ff6600")}
             </div>
 
-<<<<<<< HEAD
             <button style={{ ...styles.button, backgroundColor: "#008f39", marginTop: "30px" }} onClick={handleRecover} disabled={loading}>
               {loading ? "Recovering..." : "Recover Original (Anti-Aliasing)"}
-=======
-            <button
-              style={{ ...styles.button, backgroundColor: "#008f39", marginTop: "30px" }}
-              onClick={handleRecover}
-              disabled={loading}
-            >
-              {loading ? "Recovering..." : " Recover Original (Anti-Aliasing)"}
->>>>>>> 1011bc240ffba312a471ace54c06e6b5a701bc4c
             </button>
           </>
         )}
@@ -213,16 +204,7 @@ const VoiceGenderPage = () => {
             <audio controls src={recoveredUrl} style={{ width: "100%", marginTop: "20px" }} />
             <div style={styles.resultBox}>
               <h3>Recovered File: {recoveredResult.filename}</h3>
-<<<<<<< HEAD
-              <p>Recovered SR: {recoveredResult.recovered_sr} Hz</p>
-=======
-
-              {/* Display recovered sampling rate */}
-              {recoveredResult.recovered_sr && (
-                <p>Recovered SR: {recoveredResult.recovered_sr} Hz</p>
-              )}
-
->>>>>>> 1011bc240ffba312a471ace54c06e6b5a701bc4c
+              {recoveredResult.recovered_sr && <p>Recovered SR: {recoveredResult.recovered_sr} Hz</p>}
               <h2>
                 Gender After Recovery:{" "}
                 <span style={{ color: recoveredResult.gender === "Male" ? "blue" : recoveredResult.gender === "Female" ? "deeppink" : "gray" }}>
@@ -232,7 +214,7 @@ const VoiceGenderPage = () => {
             </div>
 
             <div style={{ marginTop: "20px" }}>
-              <h4> Frequency Spectrum Comparison (Before vs After Recovery)</h4>
+              <h4>Frequency Spectrum Comparison (Before vs After Recovery)</h4>
               {renderSpectrum(recoveredResult.spectrum_before, "Before Recovery", "#ff4444")}
               {renderSpectrum(recoveredResult.spectrum_after, "After Recovery", "#00aa33")}
             </div>

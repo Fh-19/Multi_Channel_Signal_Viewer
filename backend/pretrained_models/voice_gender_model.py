@@ -32,10 +32,8 @@ def load_model():
 
 
 def predict_gender_from_file(file_path: str):
-<<<<<<< HEAD
 
-=======
->>>>>>> 1011bc240ffba312a471ace54c06e6b5a701bc4c
+
     """تستقبل ملف صوت → تعيد Male أو Female أو Unknown"""
     global model_loaded
     
@@ -44,10 +42,9 @@ def predict_gender_from_file(file_path: str):
         if not load_model():
             return "Model failed to load"
     
-<<<<<<< HEAD
 
-=======
->>>>>>> 1011bc240ffba312a471ace54c06e6b5a701bc4c
+
+
     try:
         # تحميل الملف بصيغة mono وبمعدل 16kHz
         waveform, sr = librosa.load(file_path, sr=16000, mono=True)
@@ -81,11 +78,9 @@ def predict_gender_from_file(file_path: str):
             return "Unknown"
 
     except Exception as e:
-<<<<<<< HEAD
+
 
         return f"Error: {e}"
         # في حالة حدوث أي خطأ
       
-=======
-        return f"Error: {e}"
->>>>>>> 1011bc240ffba312a471ace54c06e6b5a701bc4c
+     
