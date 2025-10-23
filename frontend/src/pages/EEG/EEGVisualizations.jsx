@@ -26,22 +26,24 @@ export default function EEGVisualizations({
   setPolarChannel,
   polarMode,
   setPolarMode,
-  isLoading
+  isLoading,
+  maxXorChunks // NEW: Receive dynamic chunk limit
 }) {
   const renderSelectedVisualization = () => {
     switch (selectedVisualization) {
-    case "xor":
-      return (
-       <XORVisualization
-        xorChunks={xorChunks}
-        xorChannel={xorChannel}
-        channels={channels}
-        fs={fs}
-        windowSeconds={windowSeconds}
-        isLoading={isLoading}
-        xorTolerance={5.0} // Add this prop or pass from parent
-     />
-    );
+      case "xor":
+        return (
+          <XORVisualization
+            xorChunks={xorChunks}
+            xorChannel={xorChannel}
+            channels={channels}
+            fs={fs}
+            windowSeconds={windowSeconds}
+            isLoading={isLoading}
+            xorTolerance={5.0}
+            maxXorChunks={maxXorChunks} // NEW: Pass dynamic chunk limit
+          />
+        );
 
       case "polar":
         return (
@@ -90,7 +92,7 @@ export default function EEGVisualizations({
         
         {/* Visualization Selector */}
         <div style={{ marginBottom: 20 }}>
-          <label style={{ fontSize: 14, fontWeight: 600 }}>
+          <label style={{ fontSize: 14, fontWeight: 600, opacity: isLoading ? 0.7 : 1 }}>
             Select Visualization:
             <select
               value={selectedVisualization}
@@ -115,44 +117,46 @@ export default function EEGVisualizations({
         <div style={{ marginBottom: 20 }}>
           {selectedVisualization === "xor" && (
             <div>
-            <div style={{ fontSize: "12px", color: "#666", marginBottom: "8px" }}>
-              Shows points that differ from all previous chunks (point-wise XOR)
+              <div style={{ fontSize: "12px", color: "#666", marginBottom: "8px" }}>
+                Shows points that differ from all previous chunks (point-wise XOR)
+                <br />
+                <small>Using max {maxXorChunks} chunks for comparison</small>
+              </div>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>
+                XOR Channel:
+                <select
+                  value={xorChannel || ""}
+                  onChange={(e) => !isLoading && setXorChannel(e.target.value || null)}
+                  disabled={isLoading}
+                  style={{ 
+                    marginLeft: 8, 
+                    padding: "6px 8px", 
+                    borderRadius: 6,
+                    opacity: isLoading ? 0.7 : 1 
+                  }}
+                >
+                  <option value="">Auto (first channel)</option>
+                  {channels.map((ch) => <option key={`xor-${ch}`} value={ch}>{ch}</option>)}
+                </select>
+              </label>
+              <button
+                onClick={() => !isLoading && setXorChunks([])}
+                disabled={isLoading}
+                style={{ 
+                  marginLeft: 15, 
+                  padding: "6px 10px", 
+                  borderRadius: 6, 
+                  border: "none", 
+                  background: isLoading ? "#8d97b6" : "#2055c0", 
+                  color: "#fff", 
+                  fontWeight: 700,
+                  cursor: isLoading ? "not-allowed" : "pointer"
+                }}
+              >
+                Reset XOR History
+              </button>
             </div>
-          <label style={{ fontSize: 13, fontWeight: 600 }}>
-            XOR Channel:
-          <select
-            value={xorChannel || ""}
-            onChange={(e) => !isLoading && setXorChannel(e.target.value || null)}
-            disabled={isLoading}
-            style={{ 
-              marginLeft: 8, 
-              padding: "6px 8px", 
-              borderRadius: 6,
-              opacity: isLoading ? 0.7 : 1 
-         }}
-      >
-        <option value="">Auto (first channel)</option>
-        {channels.map((ch) => <option key={`xor-${ch}`} value={ch}>{ch}</option>)}
-      </select>
-    </label>
-    <button
-      onClick={() => !isLoading && setXorChunks([])}
-      disabled={isLoading}
-      style={{ 
-        marginLeft: 15, 
-        padding: "6px 10px", 
-        borderRadius: 6, 
-        border: "none", 
-        background: isLoading ? "#8d97b6" : "#2055c0", 
-        color: "#fff", 
-        fontWeight: 700,
-        cursor: isLoading ? "not-allowed" : "pointer"
-      }}
-    >
-      Reset XOR History
-    </button>
-  </div>
-)}
+          )}
 
           {selectedVisualization === "polar" && (
             <div>

@@ -1,5 +1,5 @@
 import Plot from "react-plotly.js";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 export default function XORVisualization({ 
   xorChunks, 
@@ -8,10 +8,28 @@ export default function XORVisualization({
   fs, 
   windowSeconds, 
   isLoading,
-  xorTolerance 
+  xorTolerance,
+  maxXorChunks // NEW: Receive dynamic chunk limit
 }) {
   const [localThreshold, setLocalThreshold] = useState(xorTolerance);
   
+  // Calculate chunk statistics for the UI
+  const chunkStats = useMemo(() => {
+    const activeChunks = xorChunks.filter(chunk => !chunk.removed);
+    const totalDuration = activeChunks.length * windowSeconds;
+    const timeCoverage = activeChunks.length > 1 ? 
+      `Covering ${totalDuration.toFixed(1)}s of EEG data` : 
+      'Collecting chunks...';
+    
+    return {
+      activeChunks: activeChunks.length,
+      maxChunks: maxXorChunks,
+      timeCoverage,
+      totalDuration,
+      chunkLimitReached: activeChunks.length >= maxXorChunks
+    };
+  }, [xorChunks, maxXorChunks, windowSeconds]);
+
   if (isLoading) {
     return (
       <div style={{
@@ -75,7 +93,8 @@ export default function XORVisualization({
             value: value,
             chunkIndex: chunkIdx,
             sampleIndex: timeIdx,
-            timeInSeconds: timeInSeconds
+            timeInSeconds: timeInSeconds,
+            chunkStartTime: activeChunks[chunkIdx].startTime || 0
           });
         });
       }
@@ -83,7 +102,7 @@ export default function XORVisualization({
     
     // Second pass: remove abnormalities that match previous ones
     const uniqueAbnormalities = [];
-    const seenPatterns = new Map(); // key: sampleIndex, value: Set of seen values
+    const seenPatterns = new Map();
     
     // Sort abnormalities by chunk index to process in order
     allAbnormalities.sort((a, b) => a.chunkIndex - b.chunkIndex);
@@ -117,9 +136,10 @@ export default function XORVisualization({
     const chunksWithAbnormalities = new Set();
     
     uniqueAbnormalities.forEach(abnormality => {
-      const { chunkIndex, timeInSeconds, value } = abnormality;
+      const { chunkIndex, timeInSeconds, value, chunkStartTime } = abnormality;
       const chunkName = `Chunk ${chunkIndex + 1}`;
-      const hoverText = `${chunkName} at ${timeInSeconds.toFixed(2)}s: ${value.toFixed(2)}µV`;
+      const absoluteTime = (chunkStartTime + timeInSeconds).toFixed(1);
+      const hoverText = `${chunkName} at ${absoluteTime}s: ${value.toFixed(2)}µV`;
       
       let traceIndex = traces.findIndex(t => t.name === chunkName);
       if (traceIndex === -1) {
@@ -153,7 +173,9 @@ export default function XORVisualization({
         uniqueAbnormalities: uniqueAbnormalities.length,
         totalTimeInstants: windowSamples,
         threshold: threshold,
-        chunksWithAbnormalities: chunksWithAbnormalities.size
+        chunksWithAbnormalities: chunksWithAbnormalities.size,
+        timeCoverage: chunkStats.timeCoverage,
+        maxChunks: maxXorChunks
       }
     };
   };
@@ -170,7 +192,11 @@ export default function XORVisualization({
   return (
     <div>
       <div style={{ fontWeight: 700, marginBottom: 8 }}>
-        XOR Visualization - {activeChunks.length} chunks (channel: {xorChannel || channels[0] || "-"})
+        XOR Visualization - {activeChunks.length}/{maxXorChunks} chunks 
+        {chunkStats.chunkLimitReached && " (MAX)"}
+        <div style={{ fontSize: "12px", fontWeight: "normal", color: "#666", marginTop: "4px" }}>
+          {chunkStats.timeCoverage} • Channel: {xorChannel || channels[0] || "-"}
+        </div>
       </div>
       
       {/* Threshold Control */}
@@ -215,10 +241,18 @@ export default function XORVisualization({
           background: '#f5f5f5',
           borderRadius: '4px'
         }}>
-          <strong>Showing {scatterData.chunkInfo.chunksWithAbnormalities} chunks with unique abnormalities:</strong> 
-          {` ${scatterData.chunkInfo.uniqueAbnormalities} unique abnormalities found`}
-          <br />
-          <small>Threshold: {scatterData.chunkInfo.threshold}µV | Only showing abnormalities that don't match previous chunks</small>
+          <div>
+            <strong>Chunks: {scatterData.chunkInfo.totalChunks}/{scatterData.chunkInfo.maxChunks}</strong> 
+            {` • Unique abnormalities: ${scatterData.chunkInfo.uniqueAbnormalities}`}
+          </div>
+          <div style={{ fontSize: '11px', marginTop: '4px' }}>
+            {scatterData.chunkInfo.timeCoverage} • Threshold: {scatterData.chunkInfo.threshold}µV
+            {chunkStats.chunkLimitReached && (
+              <span style={{ color: '#e24a33', fontWeight: 'bold', marginLeft: '8px' }}>
+                • Chunk limit reached - oldest chunks are being removed
+              </span>
+            )}
+          </div>
         </div>
       )}
       
@@ -232,7 +266,7 @@ export default function XORVisualization({
                 height: 400,
                 margin: { l: 50, r: 20, t: 40, b: 40 },
                 xaxis: { 
-                  title: "Time (s)",
+                  title: "Time in Chunk (s)",
                   range: [0, windowSeconds]
                 },
                 yaxis: { 
@@ -240,12 +274,12 @@ export default function XORVisualization({
                   autorange: true
                 },
                 showlegend: true,
-                title: `XOR: Unique Abnormalities (${activeChunks.length} chunks)`
+                title: `XOR: Unique Abnormalities (${activeChunks.length}/${maxXorChunks} chunks)`
               }}
               config={{ displayModeBar: true, displaylogo: false }}
             />
             
-            {/* Additional Statistics */}
+            {/* Enhanced Statistics */}
             <div style={{ 
               fontSize: "12px", 
               color: "#666", 
@@ -254,16 +288,21 @@ export default function XORVisualization({
               flexWrap: "wrap",
               gap: "15px" 
             }}>
-              <span>Total chunks: {activeChunks.length}</span>
+              <span>Total chunks: {activeChunks.length}/{maxXorChunks}</span>
               <span style={{ color: scatterData.chunkInfo.uniqueAbnormalities > 0 ? "#ff4444" : "#666", fontWeight: "bold" }}>
                 Unique abnormalities: {scatterData.chunkInfo.uniqueAbnormalities}
               </span>
               <span>
-                Coverage: {((scatterData.chunkInfo.uniqueAbnormalities / scatterData.chunkInfo.totalTimeInstants) * 100).toFixed(1)}%
+                Time coverage: {chunkStats.totalDuration.toFixed(1)}s
               </span>
               <span>
                 Chunks with abnormalities: {scatterData.chunkInfo.chunksWithAbnormalities}
               </span>
+              {chunkStats.chunkLimitReached && (
+                <span style={{ color: "#e24a33", fontWeight: "bold" }}>
+                  ⚠️ Chunk limit reached
+                </span>
+              )}
             </div>
           </>
         ) : (
@@ -282,7 +321,7 @@ export default function XORVisualization({
             <small>All differences between chunks were repeated in other chunks</small>
             <br />
             <small style={{ fontSize: '10px', marginTop: '5px' }}>
-              Try lowering the threshold to detect smaller unique differences
+              Using {activeChunks.length} chunks covering {chunkStats.totalDuration.toFixed(1)}s of EEG data
             </small>
           </div>
         )
@@ -302,7 +341,9 @@ export default function XORVisualization({
           <small>Need at least 2 chunks to detect differences</small>
           <br />
           <small style={{ fontSize: '10px', marginTop: '5px' }}>
-            Shows unique abnormalities that don't match any previous chunk
+            Collecting chunks... ({activeChunks.length}/{maxXorChunks})
+            <br />
+            Maximum {maxXorChunks} chunks will be used for comparison
           </small>
         </div>
       )}

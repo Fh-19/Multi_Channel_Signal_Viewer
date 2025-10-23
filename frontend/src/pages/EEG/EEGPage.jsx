@@ -52,12 +52,40 @@ function EEGPage() {
 
   // NEW: Aliasing experiment state
   const [experimentalFs, setExperimentalFs] = useState(fs);
-  const [originalFs, setOriginalFs] = useState(256);
+  const [originalFs, setOriginalFs] = useState(fs);
   const [isResampling, setIsResampling] = useState(false);
+
+  // NEW: Dynamic XOR chunk management
+  const [maxXorChunks, setMaxXorChunks] = useState(10);
+  const [recordingDuration, setRecordingDuration] = useState(60);
 
   // internal refs
   const segmentIndexRef = useRef(0);
   const intervalRef = useRef(null);
+
+  // NEW: Calculate dynamic chunk limit based on recording duration
+  const calculateDynamicChunkLimit = (durationSeconds, windowSizeSeconds) => {
+    const minimumChunks = 5;  // Always keep at least 5 chunks
+    const maximumChunks = 50; // Don't exceed 50 chunks for performance
+    
+    if (durationSeconds <= windowSizeSeconds * 2) {
+      // Very short recording - use minimal chunks
+      setMaxXorChunks(Math.max(minimumChunks, 3));
+    } else if (durationSeconds <= 60) {
+      // Short recording (≤1 minute) - scale with duration
+      const chunks = Math.floor(durationSeconds / windowSizeSeconds);
+      setMaxXorChunks(Math.min(Math.max(chunks, minimumChunks), 20));
+    } else if (durationSeconds <= 300) {
+      // Medium recording (1-5 minutes)
+      const chunks = Math.floor(60 / windowSizeSeconds); // Base of 1 minute worth
+      setMaxXorChunks(Math.min(chunks + 10, 35));
+    } else {
+      // Long recording (>5 minutes) - use larger but fixed limit
+      setMaxXorChunks(maximumChunks);
+    }
+    
+    console.log(`Recording duration: ${durationSeconds}s, Window: ${windowSizeSeconds}s, Max XOR chunks: ${maxXorChunks}`);
+  };
 
   // ----- Upload handler -----
   const handleFileUpload = async (e) => {
@@ -90,10 +118,14 @@ function EEGPage() {
       setAllChannels(meta.channels || []);
       setChannels((meta.channels || []).slice(0, 3));
       setFs(meta.sfreq || 256);
-      setOriginalFs(256);
+      setOriginalFs(meta.sfreq || 256);
       setExperimentalFs(meta.sfreq || 256);
+      setRecordingDuration(meta.duration_seconds || 60); // Store actual duration
       setBandPowerChannel(null);
       setXorChannel(null);
+
+      // Calculate initial chunk limit based on actual duration
+      calculateDynamicChunkLimit(meta.duration_seconds || 60, windowSeconds);
 
       // reset state
       setSegments([]);
@@ -146,6 +178,13 @@ function EEGPage() {
     loadSegments();
   }, [filename, channels, experimentalFs]);
 
+  // ----- NEW: Recalculate XOR chunk limit when window size changes -----
+  useEffect(() => {
+    if (uploadedFile) {
+      calculateDynamicChunkLimit(recordingDuration, windowSeconds);
+    }
+  }, [windowSeconds, recordingDuration, uploadedFile]);
+
   // ----- Playback loop (segments -> buffer) -----
   useEffect(() => {
     // stop previous interval
@@ -190,38 +229,38 @@ function EEGPage() {
         return combined.length > maxLen ? combined.slice(-maxLen) : combined;
       });
 
-// In the playback loop, replace the XOR Overlay Logic section with:
+      // XOR Abnormalities Logic with dynamic chunk limits
+      const windowSamples = Math.round(fs * windowSeconds);
+      const selectedXorChannel = xorChannel || channels[0];
 
-// XOR Abnormalities Logic
-const windowSamples = Math.round(fs * windowSeconds);
-const selectedXorChannel = xorChannel || channels[0];
+      if (selectedXorChannel && segData.length > 0) {
+        const currentBufferSamples = buffer[selectedXorChannel] || [];
+        
+        if (currentBufferSamples.length >= windowSamples) {
+          const currentChunk = currentBufferSamples.slice(-windowSamples);
+          
+          setXorChunks((prev) => {
+            const activeChunks = prev.filter(chunk => !chunk.removed);
+            const newChunk = {
+              samples: [...currentChunk],
+              removed: false,
+              id: Date.now() + Math.random(),
+              channel: selectedXorChannel,
+              timestamp: Date.now(),
+              startTime: time.length > 0 ? time[0] : 0,
+            };
 
-// In the playback loop, ensure chunks have the right structure:
-if (selectedXorChannel && segData.length > 0) {
-  const currentBufferSamples = buffer[selectedXorChannel] || [];
-  
-  if (currentBufferSamples.length >= windowSamples) {
-    const currentChunk = currentBufferSamples.slice(-windowSamples);
-    
-    setXorChunks((prev) => {
-      const activeChunks = prev.filter(chunk => !chunk.removed);
-      const newChunk = {
-        samples: [...currentChunk], // This must be an array of numbers
-        removed: false,
-        id: Date.now() + Math.random(),
-        channel: selectedXorChannel,
-      };
-
-      const updatedChunks = [...activeChunks, newChunk];
-      
-      const maxChunksHistory = 10;
-      if (updatedChunks.length > maxChunksHistory) {
-        return updatedChunks.slice(-maxChunksHistory);
+            const updatedChunks = [...activeChunks, newChunk];
+            
+            // DYNAMIC CHUNK LIMIT - based on recording duration
+            if (updatedChunks.length > maxXorChunks) {
+              // Remove oldest chunks first
+              return updatedChunks.slice(-maxXorChunks);
+            }
+            return updatedChunks;
+          });
+        }
       }
-      return updatedChunks;
-    });
-  }
-}
 
       // Recurrence points collection
       const [chX, chY] = recurrencePair;
@@ -251,7 +290,7 @@ if (selectedXorChannel && segData.length > 0) {
     }, intervalMs);
 
     return () => clearInterval(intervalRef.current);
-  }, [segments, channels, fs, isPlaying, playbackSpeed, windowSeconds, xorTolerance, recurrencePair, buffer, xorChannel, isLoading, isResampling, segmentTimes]);
+  }, [segments, channels, fs, isPlaying, playbackSpeed, windowSeconds, xorTolerance, recurrencePair, buffer, xorChannel, isLoading, isResampling, segmentTimes, maxXorChunks]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -348,7 +387,7 @@ if (selectedXorChannel && segData.length > 0) {
           channels={channels}
           toggleChannel={toggleChannel}
           isLoading={isLoading || isResampling}
-          // Aliasing experiment props
+          // NEW: Aliasing experiment props
           experimentalFs={experimentalFs}
           setExperimentalFs={setExperimentalFs}
           originalFs={originalFs}
@@ -429,6 +468,7 @@ if (selectedXorChannel && segData.length > 0) {
           polarMode={polarMode}
           setPolarMode={setPolarMode}
           isLoading={isLoading || isResampling}
+          maxXorChunks={maxXorChunks} // NEW: Pass to visualizations
         />
       </div>
 
@@ -452,7 +492,7 @@ if (selectedXorChannel && segData.length > 0) {
         setBandPowerChannel={setBandPowerChannel}
         isLoading={isLoading || isResampling}
         experimentalFs={experimentalFs}
-        isPlaying = {isPlaying}
+        isPlaying={isPlaying}
       />
     </div>
   );
