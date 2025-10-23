@@ -119,7 +119,7 @@ const VoiceGenderPage = () => {
     return <Line data={data} options={options} />;
   };
 
-  // New function to render comparison spectrum
+  // function to render comparison spectrum
   const renderComparisonSpectrum = () => {
     if (!originalAliasedSpectrum || !recoveredResult?.spectrum_after) return null;
     
