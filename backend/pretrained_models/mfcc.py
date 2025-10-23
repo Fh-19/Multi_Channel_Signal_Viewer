@@ -6,13 +6,13 @@ import librosa
 DATA_DIR = "data_fixed/train"
 OUTPUT_DIR = "features"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-
+# to extract features 
 def extract_features(file_path):
     y, sr = librosa.load(file_path, sr=16000)
     mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40)
     mfcc_scaled = np.mean(mfcc.T, axis=0)
     return mfcc_scaled
-
+# to prepare the datasets to split
 def prepare_dataset(split):
     X, y = [], []
     classes = {"drone": 1, "noise": 0}
@@ -28,7 +28,7 @@ def prepare_dataset(split):
                 except Exception as e:
                     print(f"Error with {path}: {e}")
     return np.array(X), np.array(y)
-
+# to make the process on dataset trained and save it 
 print("Extracting train features...")
 X_train, y_train = prepare_dataset("train")
 np.save(os.path.join(OUTPUT_DIR, "X_train.npy"), X_train)

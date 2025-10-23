@@ -12,7 +12,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 print("=== Voice Gender Router Loaded ===")
 
-# Import the model function (but model won't load until predict is called)
+# Model import
 try:
     from backend.pretrained_models.voice_gender_model import predict_gender_from_file
     MODEL_AVAILABLE = True
@@ -22,16 +22,14 @@ except Exception as e:
     print(f">>> Model import failed: {e}")
 
 def safe_predict_gender(file_path):
-    """Safe wrapper that handles model loading errors"""
     if not MODEL_AVAILABLE:
         return "Model not available"
-    
     try:
         return predict_gender_from_file(file_path)
     except Exception as e:
         return f"Prediction error: {str(e)}"
 
-# ✅ 1. تصنيف الصوت الأصلي
+# ---------------- 1. Original prediction ----------------
 @router.post("/predict")
 async def predict_voice_gender(file: UploadFile = File(...)):
     try:
@@ -60,9 +58,7 @@ async def predict_voice_gender(file: UploadFile = File(...)):
     except Exception as e:
         print(f">>> ERROR in predict_voice_gender: {e}")
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
-
-
-# ✅ 2. Aliasing effect (Down + Up Sampling)
+# ---------------- 2. Aliasing effect ----------------
 @router.post("/aliasing")
 async def aliasing_effect(filename: str = Form(...), new_sr: int = Form(...)):
     try:
@@ -72,12 +68,15 @@ async def aliasing_effect(filename: str = Form(...), new_sr: int = Form(...)):
 
         waveform, sr = librosa.load(file_path, sr=None, mono=True)
 
-        if new_sr < sr:
-            waveform_down = librosa.resample(waveform, orig_sr=sr, target_sr=new_sr)
-        else:
-            waveform_down = waveform
+        # Ensure aliasing happens: new_sr < Nyquist
+        max_sr = sr // 2
+        if new_sr >= max_sr:
+            new_sr = max_sr
+            print(f">>> new_sr too high, automatically reduced to {new_sr} Hz for aliasing")
 
+        waveform_down = librosa.resample(waveform, orig_sr=sr, target_sr=new_sr)
         aliased_waveform = librosa.resample(waveform_down, orig_sr=new_sr, target_sr=sr)
+
         aliased_filename = f"aliased_{new_sr}_{filename}"
         aliased_path = os.path.join(UPLOAD_FOLDER, aliased_filename)
         sf.write(aliased_path, aliased_waveform, sr)
@@ -96,16 +95,15 @@ async def aliasing_effect(filename: str = Form(...), new_sr: int = Form(...)):
             "gender": gender_after_alias,
             "file_url": f"http://127.0.0.1:8000/uploads/{aliased_filename}",
             "spectrum": {
-                "freqs": freqs.tolist()[::200],
-                "magnitude": magnitude.tolist()[::200]
+                "freqs": freqs.tolist()[::20],
+                "magnitude": magnitude.tolist()[::20]
             }
         }
     except Exception as e:
         print(f">>> ERROR in aliasing_effect: {e}")
         raise HTTPException(status_code=500, detail=f"Aliasing processing failed: {str(e)}")
 
-
-# ✅ 3. Anti-Aliasing Recovery + Spectrum before & after
+# ---------------- 3. Anti-aliasing recovery ----------------
 @router.post("/recover")
 async def recover_with_dsp(filename: str = Form(...)):
     try:
@@ -113,10 +111,7 @@ async def recover_with_dsp(filename: str = Form(...)):
         if not os.path.exists(file_path):
             return {"error": "File not found!"}
 
-        print(f"🎧 DSP Recovery running for: {filename}")
-
         waveform, sr = librosa.load(file_path, sr=None, mono=True)
-        print(f">>> Original audio loaded - SR: {sr}")
 
         # Spectrum before recovery
         fft_before = np.fft.fft(waveform)
@@ -129,13 +124,13 @@ async def recover_with_dsp(filename: str = Form(...)):
         upsampled = librosa.resample(waveform, orig_sr=sr, target_sr=up_sr)
 
         # ---------- Step 2: Low-pass filter ----------
-        cutoff = sr / 2.3
-        order = 10
+        cutoff = sr / 3 
+        order = 6
         b, a = butter(order, cutoff / (up_sr / 2), btype='low')
         filtered_stage1 = filtfilt(b, a, upsampled)
 
         # ---------- Step 3: Gaussian smoothing ----------
-        window = windows.gaussian(51, std=7)
+        window = windows.gaussian(101, std=15)
         window /= np.sum(window)
         filtered_stage2 = convolve1d(filtered_stage1, window, mode='reflect')
 
@@ -159,8 +154,6 @@ async def recover_with_dsp(filename: str = Form(...)):
         magnitude_after = np.abs(fft_after)[: len(freqs_after)//2]
         freqs_after = freqs_after[: len(freqs_after)//2]
 
-        print("✅ Enhanced DSP Recovery completed successfully")
-
         return {
             "filename": recovered_filename,
             "gender": recovered_gender,
@@ -179,14 +172,12 @@ async def recover_with_dsp(filename: str = Form(...)):
         }
 
     except Exception as e:
-        print(f"⚠️ DSP Recovery error: {e}")
+        print(f" DSP Recovery error: {e}")
         return {"error": str(e)}
 
-
-# 3. Test endpoint (doesn't load model)
+# ---------------- Test endpoint ----------------
 @router.get("/test")
 async def test_endpoint():
-    """Test endpoint that doesn't load the model"""
     return {
         "message": "Voice gender router is working!",
         "model_available": MODEL_AVAILABLE,

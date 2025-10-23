@@ -14,7 +14,7 @@ export default function AudioAnalysisPage() {
   const aliasWaveformRef = useRef(null);
   const wavesurferPredict = useRef(null);
   const wavesurferAlias = useRef(null);
-
+ //to control every wav
   // ✅ Initialize waveform
   const initWaveform = (ref, fileUrl) => {
     if (!ref.current) return;
@@ -75,7 +75,7 @@ export default function AudioAnalysisPage() {
     }
   };
 
-  // ✅ Alias handler
+  // ✅ Alias handler and predict
   const handleAlias = async () => {
     if (!audioFile) return alert("Please upload an audio file first!");
     setLoadingAlias(true);
@@ -145,7 +145,7 @@ export default function AudioAnalysisPage() {
             marginBottom: 20,
           }}
         ></div>
-
+       
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <button
             onClick={() => handlePlayPause("predict")}

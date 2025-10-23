@@ -10,7 +10,7 @@ import os
 from uuid import uuid4
 
 router = APIRouter()
-
+#folder to save audio files
 UPLOAD_FOLDER = "uploads"
 SPEC_FOLDER = "uploads/specs"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -47,7 +47,7 @@ model.eval()
 
 label_map = {0: "Noise", 1: "Drone"}
 
-# -----------------------
+# take the middle of all frames to form one vector
 # FEATURE EXTRACTION
 # -----------------------
 def extract_features(file_path):
@@ -55,7 +55,7 @@ def extract_features(file_path):
     mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40)
     mfcc_scaled = np.mean(mfcc.T, axis=0)
     return torch.tensor(mfcc_scaled, dtype=torch.float32)
-
+#to draw spectrogram as image PNG
 def save_spectrogram(y, sr, out_path, title):
     plt.figure(figsize=(6, 3))
     S = librosa.feature.melspectrogram(y=y, sr=sr)
@@ -80,7 +80,7 @@ def predict_audio(path):
     confidence = float(probs[idx] * 100)
     return label, round(confidence, 2)
 
-# -----------------------
+# to play audio
 # ROUTES
 # -----------------------
 @router.get("/play/{filename}")
@@ -89,14 +89,14 @@ def play_audio(filename: str):
     if os.path.exists(path):
         return FileResponse(path, media_type="audio/wav")
     return JSONResponse(content={"error": "File not found"}, status_code=404)
-
+#to view spectrogram
 @router.get("/spec/{filename}")
 def get_spec(filename: str):
     path = os.path.join(SPEC_FOLDER, filename)
     if os.path.exists(path):
         return FileResponse(path, media_type="image/png")
     return JSONResponse(content={"error": "Spectrogram not found"}, status_code=404)
-
+#to upload file and predict the result + view spectrogram
 @router.post("/predict")
 async def predict(file: UploadFile = File(...)):
     filename = f"{uuid4().hex}.wav"
@@ -120,7 +120,7 @@ async def predict(file: UploadFile = File(...)):
         }
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
-
+#upload file and change the aliasing sample rate + predict the result
 @router.post("/alias")
 async def alias_audio(file: UploadFile = File(...), rate: int = Form(...)):
     filename = f"{uuid4().hex}.wav"

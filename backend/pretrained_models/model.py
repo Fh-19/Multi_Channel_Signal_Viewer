@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
-
+#to load data and convert it to tensor
 # Load features
 X_train = np.load("features/X_train.npy")
 y_train = np.load("features/y_train.npy")
@@ -16,7 +16,7 @@ X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
 y_train_tensor = torch.tensor(y_train, dtype=torch.long)
 X_val_tensor = torch.tensor(X_val, dtype=torch.float32)
 y_val_tensor = torch.tensor(y_val, dtype=torch.long)
-
+# to prepare data
 train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
 val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
 
@@ -56,7 +56,7 @@ for epoch in range(10):
         loss = criterion(outputs, y_batch)
         loss.backward()
         optimizer.step()
-
+# nt722 mn el accuraccy
     # Validation
     model.eval()
     correct, total = 0, 0
