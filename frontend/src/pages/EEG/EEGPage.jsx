@@ -52,7 +52,7 @@ function EEGPage() {
 
   // NEW: Aliasing experiment state
   const [experimentalFs, setExperimentalFs] = useState(fs);
-  const [originalFs, setOriginalFs] = useState(fs);
+  const [originalFs, setOriginalFs] = useState(256);
   const [isResampling, setIsResampling] = useState(false);
 
   // internal refs
@@ -90,7 +90,7 @@ function EEGPage() {
       setAllChannels(meta.channels || []);
       setChannels((meta.channels || []).slice(0, 3));
       setFs(meta.sfreq || 256);
-      setOriginalFs(meta.sfreq || 256);
+      setOriginalFs(256);
       setExperimentalFs(meta.sfreq || 256);
       setBandPowerChannel(null);
       setXorChannel(null);
@@ -348,7 +348,7 @@ if (selectedXorChannel && segData.length > 0) {
           channels={channels}
           toggleChannel={toggleChannel}
           isLoading={isLoading || isResampling}
-          // NEW: Aliasing experiment props
+          // Aliasing experiment props
           experimentalFs={experimentalFs}
           setExperimentalFs={setExperimentalFs}
           originalFs={originalFs}
