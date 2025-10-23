@@ -1,4 +1,5 @@
 import Plot from "react-plotly.js";
+import { useState } from "react";
 
 export default function XORVisualization({ 
   xorChunks, 
@@ -6,33 +7,11 @@ export default function XORVisualization({
   channels, 
   fs, 
   windowSeconds, 
-  isLoading 
+  isLoading,
+  xorTolerance 
 }) {
-  const xorTraces = () => {
-    const selectedXorChannel = xorChannel || channels[0];
-    if (!selectedXorChannel) return [];
-    const windowSamples = Math.round(fs * windowSeconds);
-    const traces = [];
-    const timeAxis = Array.from({ length: windowSamples }, (_, i) => i / fs);
-
-    const activeChunks = xorChunks.filter(chunk => !chunk.removed);
-    
-    activeChunks.forEach((chunk, idx) => {
-      const vals = chunk.samples.slice(-windowSamples);
-      traces.push({
-        x: timeAxis,
-        y: vals,
-        type: "scatter",
-        mode: "lines",
-        name: `chunk ${idx + 1} (${chunk.channel})`,
-        opacity: 0.6,
-        line: { width: 1.5, color: `hsl(${(idx * 45) % 360}, 70%, 50%)` },
-        hoverinfo: "name+y",
-      });
-    });
-    return traces;
-  };
-
+  const [localThreshold, setLocalThreshold] = useState(xorTolerance);
+  
   if (isLoading) {
     return (
       <div style={{
@@ -49,22 +28,284 @@ export default function XORVisualization({
     );
   }
 
+  // Get XOR visualization data showing only unique abnormalities
+  const getXorScatterData = () => {
+    const activeChunks = xorChunks.filter(chunk => !chunk.removed);
+    if (activeChunks.length === 0) return { traces: [], chunkInfo: null };
+    
+    const threshold = localThreshold;
+    const windowSamples = Math.round(fs * windowSeconds);
+    
+    // First pass: collect all abnormalities
+    const allAbnormalities = [];
+    
+    for (let timeIdx = 0; timeIdx < windowSamples; timeIdx++) {
+      const valuesAtThisTime = [];
+      const chunksWithData = [];
+      
+      activeChunks.forEach((chunk, chunkIdx) => {
+        const samples = chunk.samples.slice(-windowSamples);
+        if (timeIdx < samples.length) {
+          valuesAtThisTime.push(samples[timeIdx]);
+          chunksWithData.push(chunkIdx);
+        }
+      });
+      
+      if (valuesAtThisTime.length === 0) continue;
+      
+      // Check if all values at this time point are similar
+      let allSimilar = true;
+      const firstValue = valuesAtThisTime[0];
+      
+      for (let i = 1; i < valuesAtThisTime.length; i++) {
+        if (Math.abs(valuesAtThisTime[i] - firstValue) > threshold) {
+          allSimilar = false;
+          break;
+        }
+      }
+      
+      // If not all similar, add abnormalities for each chunk
+      if (!allSimilar) {
+        chunksWithData.forEach((chunkIdx, arrIdx) => {
+          const timeInSeconds = timeIdx / fs;
+          const value = valuesAtThisTime[arrIdx];
+          
+          allAbnormalities.push({
+            time: timeInSeconds,
+            value: value,
+            chunkIndex: chunkIdx,
+            sampleIndex: timeIdx,
+            timeInSeconds: timeInSeconds
+          });
+        });
+      }
+    }
+    
+    // Second pass: remove abnormalities that match previous ones
+    const uniqueAbnormalities = [];
+    const seenPatterns = new Map(); // key: sampleIndex, value: Set of seen values
+    
+    // Sort abnormalities by chunk index to process in order
+    allAbnormalities.sort((a, b) => a.chunkIndex - b.chunkIndex);
+    
+    for (const abnormality of allAbnormalities) {
+      const { sampleIndex, value, chunkIndex } = abnormality;
+      
+      if (!seenPatterns.has(sampleIndex)) {
+        seenPatterns.set(sampleIndex, new Set());
+      }
+      
+      const seenValues = seenPatterns.get(sampleIndex);
+      let isUnique = true;
+      
+      // Check if this value matches any previously seen value at this time point
+      for (const seenValue of seenValues) {
+        if (Math.abs(value - seenValue) <= threshold) {
+          isUnique = false;
+          break;
+        }
+      }
+      
+      if (isUnique) {
+        uniqueAbnormalities.push(abnormality);
+        seenValues.add(value);
+      }
+    }
+    
+    // Group unique abnormalities by chunk for traces
+    const traces = [];
+    const chunksWithAbnormalities = new Set();
+    
+    uniqueAbnormalities.forEach(abnormality => {
+      const { chunkIndex, timeInSeconds, value } = abnormality;
+      const chunkName = `Chunk ${chunkIndex + 1}`;
+      const hoverText = `${chunkName} at ${timeInSeconds.toFixed(2)}s: ${value.toFixed(2)}µV`;
+      
+      let traceIndex = traces.findIndex(t => t.name === chunkName);
+      if (traceIndex === -1) {
+        traces.push({
+          x: [timeInSeconds],
+          y: [value],
+          type: "scatter",
+          mode: "markers",
+          name: chunkName,
+          marker: {
+            size: 6,
+            color: `hsl(${(chunkIndex * 45) % 360}, 70%, 50%)`,
+            symbol: "circle"
+          },
+          showlegend: true,
+          hoverinfo: "text",
+          text: [hoverText]
+        });
+        chunksWithAbnormalities.add(chunkIndex);
+      } else {
+        traces[traceIndex].x.push(timeInSeconds);
+        traces[traceIndex].y.push(value);
+        traces[traceIndex].text.push(hoverText);
+      }
+    });
+    
+    return {
+      traces,
+      chunkInfo: {
+        totalChunks: activeChunks.length,
+        uniqueAbnormalities: uniqueAbnormalities.length,
+        totalTimeInstants: windowSamples,
+        threshold: threshold,
+        chunksWithAbnormalities: chunksWithAbnormalities.size
+      }
+    };
+  };
+
+  const scatterData = getXorScatterData();
+  const hasData = scatterData.traces.length > 0;
+  const activeChunks = xorChunks.filter(chunk => !chunk.removed);
+
+  const handleThresholdChange = (e) => {
+    const newThreshold = parseFloat(e.target.value);
+    if (!isNaN(newThreshold)) setLocalThreshold(newThreshold);
+  };
+
   return (
     <div>
       <div style={{ fontWeight: 700, marginBottom: 8 }}>
-        XOR overlay (channel: {xorChannel || channels[0] || "-"}) - {xorChunks.filter(chunk => !chunk.removed).length} active chunks
+        XOR Visualization - {activeChunks.length} chunks (channel: {xorChannel || channels[0] || "-"})
       </div>
-      <Plot
-        data={xorTraces()}
-        layout={{
-          height: 400,
-          margin: { t: 20, l: 40, r: 20, b: 28 },
-          xaxis: { title: "Relative time (s)" },
-          yaxis: { title: "Amplitude (µV)" },
-        }}
-        config={{ responsive: true, displaylogo: false }}
-        style={{ width: "100%" }}
-      />
+      
+      {/* Threshold Control */}
+      <div style={{ 
+        marginBottom: 15,
+        padding: '10px',
+        background: '#f8f9fa',
+        borderRadius: '6px',
+        border: '1px solid #e9ecef'
+      }}>
+        <label style={{ fontSize: 13, fontWeight: 600 }}>
+          Similarity Threshold: 
+          <input
+            type="number"
+            min="0.1"
+            max="10"
+            step="0.1"
+            value={localThreshold}
+            onChange={handleThresholdChange}
+            style={{ 
+              margin: '0 10px',
+              width: '80px',
+              padding: '4px',
+              borderRadius: '4px',
+              border: '1px solid #ccc',
+              textAlign: 'center'
+            }}
+          />
+          µV
+        </label>
+        <div style={{ fontSize: 11, color: '#666', marginTop: '5px' }}>
+          Lower values = more sensitive to differences | Higher values = more tolerant of variation
+        </div>
+      </div>
+      
+      {scatterData.chunkInfo && (
+        <div style={{ 
+          fontSize: 12, 
+          color: '#666', 
+          marginBottom: 10,
+          padding: '8px',
+          background: '#f5f5f5',
+          borderRadius: '4px'
+        }}>
+          <strong>Showing {scatterData.chunkInfo.chunksWithAbnormalities} chunks with unique abnormalities:</strong> 
+          {` ${scatterData.chunkInfo.uniqueAbnormalities} unique abnormalities found`}
+          <br />
+          <small>Threshold: {scatterData.chunkInfo.threshold}µV | Only showing abnormalities that don't match previous chunks</small>
+        </div>
+      )}
+      
+      {activeChunks.length > 1 ? (
+        hasData ? (
+          <>
+            <Plot
+              data={scatterData.traces}
+              layout={{
+                width: "100%",
+                height: 400,
+                margin: { l: 50, r: 20, t: 40, b: 40 },
+                xaxis: { 
+                  title: "Time (s)",
+                  range: [0, windowSeconds]
+                },
+                yaxis: { 
+                  title: "Amplitude (µV)",
+                  autorange: true
+                },
+                showlegend: true,
+                title: `XOR: Unique Abnormalities (${activeChunks.length} chunks)`
+              }}
+              config={{ displayModeBar: true, displaylogo: false }}
+            />
+            
+            {/* Additional Statistics */}
+            <div style={{ 
+              fontSize: "12px", 
+              color: "#666", 
+              marginTop: "10px",
+              display: "flex", 
+              flexWrap: "wrap",
+              gap: "15px" 
+            }}>
+              <span>Total chunks: {activeChunks.length}</span>
+              <span style={{ color: scatterData.chunkInfo.uniqueAbnormalities > 0 ? "#ff4444" : "#666", fontWeight: "bold" }}>
+                Unique abnormalities: {scatterData.chunkInfo.uniqueAbnormalities}
+              </span>
+              <span>
+                Coverage: {((scatterData.chunkInfo.uniqueAbnormalities / scatterData.chunkInfo.totalTimeInstants) * 100).toFixed(1)}%
+              </span>
+              <span>
+                Chunks with abnormalities: {scatterData.chunkInfo.chunksWithAbnormalities}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            justifyContent: "center", 
+            height: "400px",
+            color: "#8d97b6",
+            border: "1px dashed #ddd",
+            borderRadius: "8px",
+            flexDirection: 'column'
+          }}>
+            No unique abnormalities found within threshold ({localThreshold}µV)
+            <br />
+            <small>All differences between chunks were repeated in other chunks</small>
+            <br />
+            <small style={{ fontSize: '10px', marginTop: '5px' }}>
+              Try lowering the threshold to detect smaller unique differences
+            </small>
+          </div>
+        )
+      ) : (
+        <div style={{ 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "center", 
+          height: "400px",
+          color: "#8d97b6",
+          border: "1px dashed #ddd",
+          borderRadius: "8px",
+          flexDirection: 'column'
+        }}>
+          XOR visualization waiting for chunk data...
+          <br />
+          <small>Need at least 2 chunks to detect differences</small>
+          <br />
+          <small style={{ fontSize: '10px', marginTop: '5px' }}>
+            Shows unique abnormalities that don't match any previous chunk
+          </small>
+        </div>
+      )}
     </div>
   );
 }

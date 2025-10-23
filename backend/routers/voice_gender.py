@@ -111,6 +111,11 @@ async def recover_with_dsp(filename: str = Form(...)):
         if not os.path.exists(file_path):
             return {"error": "File not found!"}
 
+<<<<<<< HEAD
+=======
+        print(f" DSP Recovery running for: {filename}")
+
+>>>>>>> 1011bc240ffba312a471ace54c06e6b5a701bc4c
         waveform, sr = librosa.load(file_path, sr=None, mono=True)
 
         # Spectrum before recovery
@@ -154,6 +159,11 @@ async def recover_with_dsp(filename: str = Form(...)):
         magnitude_after = np.abs(fft_after)[: len(freqs_after)//2]
         freqs_after = freqs_after[: len(freqs_after)//2]
 
+<<<<<<< HEAD
+=======
+        print(" Enhanced DSP Recovery completed successfully")
+
+>>>>>>> 1011bc240ffba312a471ace54c06e6b5a701bc4c
         return {
             "filename": recovered_filename,
             "gender": recovered_gender,
