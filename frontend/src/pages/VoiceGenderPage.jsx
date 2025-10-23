@@ -244,7 +244,7 @@ const VoiceGenderPage = () => {
               onClick={handleRecover}
               disabled={loading}
             >
-              {loading ? "Recovering..." : "🔧 Recover Original (Anti-Aliasing)"}
+              {loading ? "Recovering..." : " Recover Original (Anti-Aliasing)"}
             </button>
           </>
         )}
@@ -256,7 +256,7 @@ const VoiceGenderPage = () => {
             <div style={styles.resultBox}>
               <h3>Recovered File: {recoveredResult.filename}</h3>
 
-              {/* ✅ Display recovered sampling rate */}
+              {/* Display recovered sampling rate */}
               {recoveredResult.recovered_sr && (
                 <p>Recovered SR: {recoveredResult.recovered_sr} Hz</p>
               )}
@@ -280,7 +280,7 @@ const VoiceGenderPage = () => {
 
             {/* Display both before & after recovery */}
             <div style={{ marginTop: "20px" }}>
-              <h4>🔍 Frequency Spectrum Comparison (Before vs After Recovery)</h4>
+              <h4> Frequency Spectrum Comparison (Before vs After Recovery)</h4>
               {renderSpectrum(recoveredResult.spectrum_before, "Before Recovery", "#ff4444")}
               {renderSpectrum(recoveredResult.spectrum_after, "After Recovery", "#00aa33")}
             </div>

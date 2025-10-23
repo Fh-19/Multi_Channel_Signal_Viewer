@@ -113,7 +113,7 @@ async def recover_with_dsp(filename: str = Form(...)):
         if not os.path.exists(file_path):
             return {"error": "File not found!"}
 
-        print(f"🎧 DSP Recovery running for: {filename}")
+        print(f" DSP Recovery running for: {filename}")
 
         waveform, sr = librosa.load(file_path, sr=None, mono=True)
         print(f">>> Original audio loaded - SR: {sr}")
@@ -159,7 +159,7 @@ async def recover_with_dsp(filename: str = Form(...)):
         magnitude_after = np.abs(fft_after)[: len(freqs_after)//2]
         freqs_after = freqs_after[: len(freqs_after)//2]
 
-        print("✅ Enhanced DSP Recovery completed successfully")
+        print(" Enhanced DSP Recovery completed successfully")
 
         return {
             "filename": recovered_filename,
@@ -179,7 +179,7 @@ async def recover_with_dsp(filename: str = Form(...)):
         }
 
     except Exception as e:
-        print(f"⚠️ DSP Recovery error: {e}")
+        print(f" DSP Recovery error: {e}")
         return {"error": str(e)}
 
 

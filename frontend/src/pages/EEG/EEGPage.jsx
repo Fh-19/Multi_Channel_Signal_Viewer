@@ -190,75 +190,38 @@ function EEGPage() {
         return combined.length > maxLen ? combined.slice(-maxLen) : combined;
       });
 
-      // XOR Overlay Logic
-      const windowSamples = Math.round(fs * windowSeconds);
-      const selectedXorChannel = xorChannel || channels[0];
+// In the playback loop, replace the XOR Overlay Logic section with:
+
+// XOR Abnormalities Logic
+const windowSamples = Math.round(fs * windowSeconds);
+const selectedXorChannel = xorChannel || channels[0];
+
+// In the playback loop, ensure chunks have the right structure:
+if (selectedXorChannel && segData.length > 0) {
+  const currentBufferSamples = buffer[selectedXorChannel] || [];
+  
+  if (currentBufferSamples.length >= windowSamples) {
+    const currentChunk = currentBufferSamples.slice(-windowSamples);
+    
+    setXorChunks((prev) => {
+      const activeChunks = prev.filter(chunk => !chunk.removed);
+      const newChunk = {
+        samples: [...currentChunk], // This must be an array of numbers
+        removed: false,
+        id: Date.now() + Math.random(),
+        channel: selectedXorChannel,
+      };
+
+      const updatedChunks = [...activeChunks, newChunk];
       
-      if (selectedXorChannel && segData.length > 0) {
-        const currentBufferSamples = buffer[selectedXorChannel] || [];
-        
-        if (currentBufferSamples.length >= windowSamples) {
-          const currentChunk = currentBufferSamples.slice(-windowSamples);
-          
-          setXorChunks((prev) => {
-            const newChunk = {
-              samples: [...currentChunk],
-              removed: false,
-              id: Date.now() + Math.random(),
-              channel: selectedXorChannel,
-            };
-
-            let chunksToRemove = [];
-            let newChunkIsDuplicate = false;
-
-            for (let i = 0; i < prev.length; i++) {
-              if (prev[i].removed) continue;
-              
-              const existingChunk = prev[i].samples;
-              
-              let totalDiff = 0;
-              for (let k = 0; k < windowSamples; k++) {
-                totalDiff += Math.abs(existingChunk[k] - newChunk.samples[k]);
-              }
-              const meanDiff = totalDiff / windowSamples;
-              
-              const existingRange = Math.max(...existingChunk) - Math.min(...existingChunk);
-              const newRange = Math.max(...newChunk.samples) - Math.min(...newChunk.samples);
-              
-              console.log(`XOR Comparison [${selectedXorChannel}] - Mean diff: ${meanDiff.toFixed(4)}µV, Tolerance: ${xorTolerance}µV`);
-              
-              if (meanDiff <= xorTolerance) {
-                console.log(`🚨 REMOVING CHUNKS [${selectedXorChannel}] - Mean diff ${meanDiff.toFixed(4)}µV <= Tolerance ${xorTolerance}µV`);
-                chunksToRemove.push(i);
-                newChunkIsDuplicate = true;
-              }
-            }
-
-            const updatedChunks = prev.map((chunk, index) => {
-              if (chunksToRemove.includes(index)) {
-                console.log(`🗑️ Removing existing chunk ${index} from channel ${chunk.channel}`);
-                return { ...chunk, removed: true };
-              }
-              return chunk;
-            });
-
-            let result;
-            if (newChunkIsDuplicate) {
-              console.log(`🗑️ Not adding new chunk from ${selectedXorChannel} - it's a duplicate`);
-              result = updatedChunks;
-            } else {
-              console.log(`✅ Adding new chunk from ${selectedXorChannel} - unique signal`);
-              result = [...updatedChunks, newChunk];
-            }
-
-            const maxChunksHistory = 20;
-            if (result.length > maxChunksHistory) {
-              return result.slice(-maxChunksHistory);
-            }
-            return result;
-          });
-        }
+      const maxChunksHistory = 10;
+      if (updatedChunks.length > maxChunksHistory) {
+        return updatedChunks.slice(-maxChunksHistory);
       }
+      return updatedChunks;
+    });
+  }
+}
 
       // Recurrence points collection
       const [chX, chY] = recurrencePair;

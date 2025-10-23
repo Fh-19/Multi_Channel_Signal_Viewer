@@ -9,8 +9,6 @@ export default function EEGControls({
   setPlaybackSpeed,
   windowSeconds,
   setWindowSeconds,
-  xorTolerance,
-  setXorTolerance,
   allChannels,
   channels,
   toggleChannel,
@@ -376,27 +374,6 @@ export default function EEGControls({
             <span style={{ fontSize: "12px", color: "#666", minWidth: "40px" }}>
               {windowSeconds}s
             </span>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "12px", color: "#666" }}>XOR tol:</span>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              max="100"
-              value={xorTolerance}
-              onChange={(e) => setXorTolerance(Number(e.target.value))}
-              disabled={!segments.length || isLoading || isResampling}
-              style={{ 
-                width: "80px", 
-                padding: "6px", 
-                borderRadius: "4px",
-                border: "1px solid #ddd",
-                opacity: (segments.length && !isLoading && !isResampling) ? 1 : 0.6
-              }}
-            />
-            <span style={{ fontSize: "12px", color: "#666" }}>µV</span>
           </div>
         </div>
       </div>
