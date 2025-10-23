@@ -61,7 +61,7 @@ def get_ecg(
     return {
         "signals": signals[:, leads].astype(float).tolist(),
         "fs": float(fs),
-        "original_fs": float(fs),  # NEW: Store original FS for reference
+        "original_fs": float(fs), 
         "r_peaks": {int(k): [int(x) for x in v] for k, v in r_peaks_dict.items()},
         "cycles": {int(k): [[float(x) for x in cycle] for cycle in v] for k, v in cycles.items()},
         "lead_names": [str(name) for name in lead_names],
@@ -72,8 +72,7 @@ def get_ecg(
 def resample_ecg(req: ResampleRequest):
     """
     Universal resampling endpoint - handles both upsampling and downsampling.
-    
-    Educational Purpose: 
+ 
     - Downsampling (target_fs < original_fs): Shows aliasing effects
     - Upsampling (target_fs > original_fs): Shows interpolation effects
     - Same frequency: No change
@@ -125,11 +124,11 @@ def resample_ecg(req: ResampleRequest):
 def get_resampling_explanation(original_fs, target_fs):
     """Generate educational explanation for the resampling operation."""
     if target_fs < original_fs:
-        return f"⚠️ DOWNSAMPLING: {target_fs} Hz < {original_fs} Hz. High frequencies above {target_fs/2} Hz will alias (fold back as distortion)."
+        return f" DOWNSAMPLING: {target_fs} Hz < {original_fs} Hz. High frequencies above {target_fs/2} Hz will alias (fold back as distortion)."
     elif target_fs > original_fs:
-        return f"✅ UPSAMPLING: {target_fs} Hz > {original_fs} Hz. Signal becomes smoother through interpolation, but no new information is added."
+        return f" UPSAMPLING: {target_fs} Hz > {original_fs} Hz. Signal becomes smoother through interpolation, but no new information is added."
     else:
-        return f"ℹ️ NO CHANGE: Sampling rate remains at {original_fs} Hz."
+        return f" NO CHANGE: Sampling rate remains at {original_fs} Hz."
 
 # --- WebSocket streaming ECG samples (unchanged) ---
 @router.websocket("/ws/ecg/{record_number}")
