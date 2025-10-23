@@ -9,24 +9,18 @@ import {
   CategoryScale,
   Tooltip,
   Legend,
-  Title
+  Title,
+  Filler
 } from "chart.js";
 
-ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend, Title);
+ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend, Title, Filler);
 
 const VoiceGenderPage = () => {
   const [file, setFile] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
-  const [aliasedUrl, setAliasedUrl] = useState(null);
-  const [recoveredUrl, setRecoveredUrl] = useState(null);
-
   const [result, setResult] = useState(null);
   const [aliasedResult, setAliasedResult] = useState(null);
   const [recoveredResult, setRecoveredResult] = useState(null);
-  
-  // Store the original aliased spectrum separately
-  const [originalAliasedSpectrum, setOriginalAliasedSpectrum] = useState(null);
-
   const [loading, setLoading] = useState(false);
   const [freq, setFreq] = useState(8000);
 
@@ -36,9 +30,6 @@ const VoiceGenderPage = () => {
     setResult(null);
     setAliasedResult(null);
     setRecoveredResult(null);
-    setRecoveredUrl(null);
-    setAliasedUrl(null);
-    setOriginalAliasedSpectrum(null);
     if (selectedFile) setAudioUrl(URL.createObjectURL(selectedFile));
   };
 
@@ -72,8 +63,6 @@ const VoiceGenderPage = () => {
     try {
       const res = await axios.post("http://127.0.0.1:8000/api/voice_gender/aliasing", formData);
       setAliasedResult(res.data);
-      setAliasedUrl(res.data.file_url);
-      setOriginalAliasedSpectrum(res.data.spectrum);
     } catch (err) {
       console.error(err);
       alert("Aliasing error. Check backend.");
@@ -91,7 +80,6 @@ const VoiceGenderPage = () => {
     try {
       const res = await axios.post("http://127.0.0.1:8000/api/voice_gender/recover", formData);
       setRecoveredResult(res.data);
-      setRecoveredUrl(res.data.file_url);
     } catch (err) {
       console.error(err);
       alert("Recovery error. Check backend.");
@@ -100,34 +88,42 @@ const VoiceGenderPage = () => {
     }
   };
 
-  // Helper function to get accurate frequency spectrum data
-  const getAccurateSpectrumData = (spectrumData, maxFrequency = null) => {
+  // Process spectrum data for better visualization
+  const processSpectrumData = (spectrumData, maxFrequency = 5000) => {
     if (!spectrumData || !spectrumData.freqs || !spectrumData.magnitude) return null;
     
-    // For frequency spectrum, we don't use time windows
-    // Instead, we focus on meaningful frequency ranges
     let freqs = spectrumData.freqs;
     let magnitude = spectrumData.magnitude;
     
-    // If maxFrequency is specified, filter to show only up to that frequency
+    // Filter to show only meaningful frequency range for voice
     if (maxFrequency && freqs.length > 0) {
-      const lastIndex = freqs.findIndex(freq => freq > maxFrequency);
-      const cutoffIndex = lastIndex === -1 ? freqs.length : lastIndex;
-      
-      freqs = freqs.slice(0, cutoffIndex);
-      magnitude = magnitude.slice(0, cutoffIndex);
+      const cutoffIndex = freqs.findIndex(freq => freq > maxFrequency);
+      if (cutoffIndex !== -1) {
+        freqs = freqs.slice(0, cutoffIndex);
+        magnitude = magnitude.slice(0, cutoffIndex);
+      }
     }
     
-    // Reduce data density for better performance while maintaining accuracy
-    // Keep more points in lower frequencies where detail matters
-    const reductionFactor = Math.max(1, Math.floor(freqs.length / 1000));
+    // Reduce data points for better performance while maintaining accuracy
+    // Keep more points in lower frequencies where voice signals are concentrated
+    const targetPoints = 800; // Increased for better resolution
+    const reductionFactor = Math.max(1, Math.floor(freqs.length / targetPoints));
+    
     if (reductionFactor > 1) {
       const reducedFreqs = [];
       const reducedMagnitude = [];
       
+      // Use averaging to reduce noise and show clearer signal
       for (let i = 0; i < freqs.length; i += reductionFactor) {
-        reducedFreqs.push(Math.round(freqs[i] * 100) / 100); // Keep 2 decimal places for frequencies
-        reducedMagnitude.push(Math.round(magnitude[i]));
+        const chunkFreqs = freqs.slice(i, i + reductionFactor);
+        const chunkMagnitude = magnitude.slice(i, i + reductionFactor);
+        
+        // Use average frequency and max magnitude for better signal visibility
+        const avgFreq = chunkFreqs.reduce((a, b) => a + b, 0) / chunkFreqs.length;
+        const maxMag = Math.max(...chunkMagnitude);
+        
+        reducedFreqs.push(Number(avgFreq.toFixed(1)));
+        reducedMagnitude.push(Math.round(maxMag));
       }
       
       freqs = reducedFreqs;
@@ -137,22 +133,24 @@ const VoiceGenderPage = () => {
     return { freqs, magnitude };
   };
 
-  const renderSpectrum = (spectrumData, label, color = "#2055c0", maxFrequency = 5000) => {
-    if (!spectrumData) return null;
+  const renderSpectrum = (spectrumData, label, color = "#2055c0") => {
+    if (!spectrumData) return <div style={styles.placeholder}>No spectrum data available</div>;
     
-    const accurateData = getAccurateSpectrumData(spectrumData, maxFrequency);
-    if (!accurateData) return null;
+    const processedData = processSpectrumData(spectrumData);
+    if (!processedData) return <div style={styles.placeholder}>Error processing spectrum data</div>;
 
     const data = {
-      labels: accurateData.freqs,
+      labels: processedData.freqs,
       datasets: [
         { 
           label, 
-          data: accurateData.magnitude, 
-          borderColor: color, 
-          borderWidth: 1.5, 
+          data: processedData.magnitude, 
+          borderColor: color,
+          backgroundColor: `${color}20`,
+          borderWidth: 2,
           pointRadius: 0,
-          tension: 0.1 // Smooth lines
+          tension: 0.2,
+          fill: true
         },
       ],
     };
@@ -162,37 +160,38 @@ const VoiceGenderPage = () => {
       maintainAspectRatio: false,
       scales: {
         x: { 
-          title: { 
-            text: "Frequency (Hz)", 
-            display: true,
-            font: { weight: 'bold' }
-          },
           type: 'linear',
-          ticks: {
-            callback: function(value) {
-              return value % 1000 === 0 ? value + 'Hz' : '';
-            },
-            autoSkip: true,
-            maxTicksLimit: 10
-          },
-          grid: {
-            color: 'rgba(0,0,0,0.1)'
-          }
-        },
-        y: { 
           title: { 
-            text: "Magnitude", 
-            display: true,
-            font: { weight: 'bold' }
+            display: true, 
+            text: "Frequency (Hz)",
+            font: { size: 12, weight: 'bold' }
           },
-          beginAtZero: true,
           ticks: {
+            maxTicksLimit: 12,
             callback: function(value) {
-              return Math.round(value);
+              if (value % 1000 === 0) return value + 'Hz';
+              return '';
             }
           },
           grid: {
-            color: 'rgba(0,0,0,0.1)'
+            color: 'rgba(0,0,0,0.1)',
+            drawBorder: true
+          }
+        },
+        y: { 
+          type: 'linear',
+          title: { 
+            display: true, 
+            text: "Magnitude",
+            font: { size: 12, weight: 'bold' }
+          },
+          beginAtZero: true,
+          ticks: {
+            precision: 0
+          },
+          grid: {
+            color: 'rgba(0,0,0,0.1)',
+            drawBorder: true
           }
         },
       },
@@ -202,145 +201,36 @@ const VoiceGenderPage = () => {
           position: "top",
           labels: {
             usePointStyle: true,
-            padding: 20,
+            padding: 15,
             font: { size: 12 }
           }
         },
         tooltip: {
           mode: 'index',
           intersect: false,
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          titleFont: { size: 12 },
+          bodyFont: { size: 12 },
           callbacks: {
-            label: function(context) {
-              return `${context.dataset.label}: ${Math.round(context.parsed.y)} @ ${context.parsed.x.toFixed(1)}Hz`;
-            }
+            title: (context) => `Frequency: ${context[0].parsed.x} Hz`,
+            label: (context) => `Magnitude: ${context.parsed.y}`
           }
         },
-        title: {
-          display: true,
-          text: `Frequency Spectrum - ${label}`,
-          font: { size: 16, weight: 'bold' },
-          padding: { bottom: 20 }
-        }
       },
       interaction: {
         mode: 'nearest',
         axis: 'x',
         intersect: false
-      }
-    };
-    
-    return (
-      <div style={{ height: '400px', marginBottom: '30px' }}>
-        <Line data={data} options={options} />
-      </div>
-    );
-  };
-
-  // New function to render comparison spectrum
-  const renderComparisonSpectrum = () => {
-    if (!originalAliasedSpectrum || !recoveredResult?.spectrum_after) return null;
-    
-    const aliasedData = getAccurateSpectrumData(originalAliasedSpectrum, 5000);
-    const recoveredData = getAccurateSpectrumData(recoveredResult.spectrum_after, 5000);
-    
-    if (!aliasedData || !recoveredData) return null;
-
-    const data = {
-      labels: aliasedData.freqs,
-      datasets: [
-        { 
-          label: "Aliased (Before Recovery)", 
-          data: aliasedData.magnitude, 
-          borderColor: "#ff4444", 
-          borderWidth: 2, 
-          pointRadius: 0,
-          tension: 0.1
-        },
-        { 
-          label: "After Recovery", 
-          data: recoveredData.magnitude, 
-          borderColor: "#00aa33", 
-          borderWidth: 2, 
-          pointRadius: 0,
-          tension: 0.1
-        },
-      ],
-    };
-    
-    const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: { 
-          title: { 
-            text: "Frequency (Hz)", 
-            display: true,
-            font: { weight: 'bold' }
-          },
-          type: 'linear',
-          ticks: {
-            callback: function(value) {
-              return value % 1000 === 0 ? value + 'Hz' : '';
-            },
-            autoSkip: true,
-            maxTicksLimit: 10
-          },
-          grid: {
-            color: 'rgba(0,0,0,0.1)'
-          }
-        },
-        y: { 
-          title: { 
-            text: "Magnitude", 
-            display: true,
-            font: { weight: 'bold' }
-          },
-          beginAtZero: true,
-          ticks: {
-            callback: function(value) {
-              return Math.round(value);
-            }
-          },
-          grid: {
-            color: 'rgba(0,0,0,0.1)'
-          }
-        },
       },
-      plugins: { 
-        legend: { 
-          display: true, 
-          position: "top",
-          labels: {
-            usePointStyle: true,
-            padding: 20,
-            font: { size: 12 }
-          }
-        },
-        tooltip: {
-          mode: 'index',
-          intersect: false,
-          callbacks: {
-            label: function(context) {
-              return `${context.dataset.label}: ${Math.round(context.parsed.y)} @ ${context.parsed.x.toFixed(1)}Hz`;
-            }
-          }
-        },
-        title: {
-          display: true,
-          text: "Frequency Spectrum Comparison - Aliased vs Recovered",
-          font: { size: 16, weight: 'bold' },
-          padding: { bottom: 20 }
+      elements: {
+        line: {
+          borderWidth: 2
         }
-      },
-      interaction: {
-        mode: 'nearest',
-        axis: 'x',
-        intersect: false
       }
     };
     
     return (
-      <div style={{ height: '450px', marginBottom: '30px' }}>
+      <div style={styles.chartContainer}>
         <Line data={data} options={options} />
       </div>
     );
@@ -348,175 +238,378 @@ const VoiceGenderPage = () => {
 
   return (
     <div style={styles.pageContainer}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>🎙️ Voice Gender Classifier + Aliasing + Recovery</h1>
-        <label htmlFor="fileUpload" style={{ display: "block", fontWeight: "600" }}>
-          Select a WAV File:
-        </label>
-        <input
-          id="fileUpload"
-          type="file"
-          accept=".wav"
-          onChange={handleFileChange}
-          style={{ marginBottom: "10px" }}
-        />
-        {audioUrl && <audio controls src={audioUrl} style={{ width: "100%", marginTop: "10px" }} />}
-        <button style={styles.button} onClick={handleUpload} disabled={loading}>
-          {loading ? "Processing..." : "Upload & Detect"}
-        </button>
+      {/* Header */}
+      <div style={styles.header}>
+        <h1 style={styles.title}>Voice Gender Analysis</h1>
+        <p style={styles.subtitle}>Audio Processing with Aliasing Effects</p>
+      </div>
 
-        {result && (
-          <>
-            <div style={styles.resultBox}>
-              <h3>Original File: {result.filename}</h3>
-              <p>Sampling Rate: {result.sampling_rate} Hz</p>
-              <h2>
-                Gender:{" "}
-                <span style={{ color: result.gender === "Male" ? "blue" : result.gender === "Female" ? "deeppink" : "gray" }}>
-                  {result.gender}
-                </span>
-              </h2>
-            </div>
-
-            <div style={{ marginTop: "20px" }}>
-              <h4>Frequency Spectrum (Original) - 0-5kHz Range</h4>
-              {renderSpectrum(result.spectrum, "Original Spectrum", "#2055c0", 5000)}
-            </div>
-
-            <div style={{ marginTop: "40px" }}>
-              <h3>🎚️ Aliasing Control</h3>
-              <label htmlFor="freqRange" style={{ fontWeight: "600" }}>
-                Sampling Frequency (must be below Nyquist):
-              </label>
-              <input
-                id="freqRange"
-                type="range"
-                min="1000"
-                max={Math.floor(result.sampling_rate / 2) - 100}
-                step="500"
-                value={freq}
-                onChange={(e) => setFreq(e.target.value)}
-                style={{ width: "100%" }}
-              />
-              <p>Sampling Frequency: {freq} Hz</p>
-
-              <button style={{ ...styles.button, backgroundColor: "#ff7b00" }} onClick={handleAliasing} disabled={loading}>
-                Apply Aliasing
-              </button>
-            </div>
-          </>
-        )}
-
-        {aliasedUrl && (
-          <>
-            <audio controls src={aliasedUrl} style={{ width: "100%", marginTop: "20px" }} />
-            <div style={styles.resultBox}>
-              <h3>Aliased File: {aliasedResult.filename}</h3>
-              <p>New SR: {aliasedResult.new_sr} Hz</p>
-              <h2>
-                Gender After Aliasing:{" "}
-                <span style={{ color: aliasedResult.gender === "Male" ? "blue" : aliasedResult.gender === "Female" ? "deeppink" : "gray" }}>
-                  {aliasedResult.gender}
-                </span>
-              </h2>
-            </div>
-
-            <div style={{ marginTop: "20px" }}>
-              <h4>Frequency Spectrum (Aliased) - 0-5kHz Range</h4>
-              {renderSpectrum(aliasedResult.spectrum, "Aliased Spectrum", "#ff6600", 5000)}
-            </div>
-
-            <button style={{ ...styles.button, backgroundColor: "#008f39", marginTop: "30px" }} onClick={handleRecover} disabled={loading}>
-              {loading ? "Recovering..." : "Recover Original (Anti-Aliasing)"}
+      {/* Main Content */}
+      <div style={styles.mainContent}>
+        {/* Left Panel - Controls */}
+        <div style={styles.leftPanel}>
+          {/* File Upload Section */}
+          <div style={styles.section}>
+            <h3 style={styles.sectionTitle}>File Upload</h3>
+            <input
+              type="file"
+              accept=".wav"
+              onChange={handleFileChange}
+              style={styles.fileInput}
+            />
+            {audioUrl && (
+              <div style={styles.audioSection}>
+                <audio controls src={audioUrl} style={styles.audioPlayer} />
+              </div>
+            )}
+            <button 
+              style={styles.uploadButton} 
+              onClick={handleUpload} 
+              disabled={loading || !file}
+            >
+              {loading ? "Processing..." : "Upload & Analyze"}
             </button>
-          </>
-        )}
+          </div>
 
-        {recoveredUrl && recoveredResult && (
-          <>
-            <audio controls src={recoveredUrl} style={{ width: "100%", marginTop: "20px" }} />
-            <div style={styles.resultBox}>
-              <h3>Recovered File: {recoveredResult.filename}</h3>
-              {recoveredResult.recovered_sr && <p>Recovered SR: {recoveredResult.recovered_sr} Hz</p>}
-              <h2>
-                Gender After Recovery:{" "}
-                <span style={{ color: recoveredResult.gender === "Male" ? "blue" : recoveredResult.gender === "Female" ? "deeppink" : "gray" }}>
-                  {recoveredResult.gender}
-                </span>
-              </h2>
-            </div>
-
-            <div style={{ marginTop: "20px" }}>
-              <h4>Frequency Spectrum Comparison (Aliased vs Recovered)</h4>
-              <p style={{ fontSize: "14px", color: "#666", marginBottom: "20px" }}>
-                <span style={{ color: "#ff4444", fontWeight: "bold" }}>Red:</span> Original Aliased Spectrum • 
-                <span style={{ color: "#00aa33", fontWeight: "bold" }}> Green:</span> After Anti-Aliasing Recovery
-              </p>
-              {renderComparisonSpectrum()}
-              
-              {/* Individual spectra for detailed inspection */}
-              <div style={{ marginTop: "40px" }}>
-                <h4>Individual Spectra - 0-5kHz Range</h4>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "15px" }}>
-                  <div>
-                    <h5 style={{ color: "#ff4444" }}>Aliased Spectrum</h5>
-                    {renderSpectrum(originalAliasedSpectrum, "Aliased", "#ff4444", 5000)}
-                  </div>
-                  <div>
-                    <h5 style={{ color: "#00aa33" }}>Recovered Spectrum</h5>
-                    {renderSpectrum(recoveredResult.spectrum_after, "Recovered", "#00aa33", 5000)}
-                  </div>
-                </div>
+          {/* Original Results */}
+          {result && (
+            <div style={styles.section}>
+              <h3 style={styles.sectionTitle}>Original Analysis</h3>
+              <div style={styles.infoBox}>
+                <p><strong>File:</strong> {result.filename}</p>
+                <p><strong>Sample Rate:</strong> {result.sampling_rate} Hz</p>
+                <p><strong>Gender:</strong> 
+                  <span style={{ 
+                    color: result.gender === "Male" ? "#2980b9" : 
+                           result.gender === "Female" ? "#e74c3c" : "#7f8c8d",
+                    fontWeight: "bold",
+                    marginLeft: "8px"
+                  }}>
+                    {result.gender}
+                  </span>
+                </p>
               </div>
             </div>
-          </>
-        )}
+          )}
+
+          {/* Aliasing Controls */}
+          {result && (
+            <div style={styles.section}>
+              <h3 style={styles.sectionTitle}>Aliasing Control</h3>
+              <div style={styles.controlBox}>
+                <label style={styles.sliderLabel}>
+                  Target Sampling Rate: <strong>{freq} Hz</strong>
+                </label>
+                <input
+                  type="range"
+                  min="1000"
+                  max={Math.floor(result.sampling_rate / 2) - 100}
+                  step="100"
+                  value={freq}
+                  onChange={(e) => setFreq(parseInt(e.target.value))}
+                  style={styles.slider}
+                />
+                <div style={styles.sliderInfo}>
+                  <span>1kHz</span>
+                  <span>Nyquist: {Math.floor(result.sampling_rate / 2)}Hz</span>
+                </div>
+                <button 
+                  style={styles.warningButton} 
+                  onClick={handleAliasing} 
+                  disabled={loading}
+                >
+                  Apply Aliasing
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Aliased Results */}
+          {aliasedResult && (
+            <div style={styles.section}>
+              <h3 style={styles.sectionTitle}>Aliasing Results</h3>
+              <div style={styles.infoBox}>
+                <p><strong>New Sample Rate:</strong> {aliasedResult.new_sr} Hz</p>
+                <p><strong>Gender:</strong> 
+                  <span style={{ 
+                    color: aliasedResult.gender === "Male" ? "#2980b9" : 
+                           aliasedResult.gender === "Female" ? "#e74c3c" : "#7f8c8d",
+                    fontWeight: "bold",
+                    marginLeft: "8px"
+                  }}>
+                    {aliasedResult.gender}
+                  </span>
+                </p>
+              </div>
+              {aliasedResult.file_url && (
+                <div style={styles.audioSection}>
+                  <audio controls src={aliasedResult.file_url} style={styles.audioPlayer} />
+                </div>
+              )}
+              <button 
+                style={styles.successButton} 
+                onClick={handleRecover} 
+                disabled={loading}
+              >
+                Recover Audio
+              </button>
+            </div>
+          )}
+
+          {/* Recovery Results */}
+          {recoveredResult && (
+            <div style={styles.section}>
+              <h3 style={styles.sectionTitle}>Recovery Results</h3>
+              <div style={styles.infoBox}>
+                <p><strong>Gender:</strong> 
+                  <span style={{ 
+                    color: recoveredResult.gender === "Male" ? "#2980b9" : 
+                           recoveredResult.gender === "Female" ? "#e74c3c" : "#7f8c8d",
+                    fontWeight: "bold",
+                    marginLeft: "8px"
+                  }}>
+                    {recoveredResult.gender}
+                  </span>
+                </p>
+              </div>
+              {recoveredResult.file_url && (
+                <div style={styles.audioSection}>
+                  <audio controls src={recoveredResult.file_url} style={styles.audioPlayer} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right Panel - Visualizations */}
+        <div style={styles.rightPanel}>
+          {/* Original Spectrum */}
+          <div style={styles.vizSection}>
+            <h3 style={styles.vizTitle}>Original Spectrum (0-5kHz)</h3>
+            {result ? (
+              renderSpectrum(result.spectrum, "Original Signal", "#3498db")
+            ) : (
+              <div style={styles.placeholder}>Upload a file to see the frequency spectrum</div>
+            )}
+          </div>
+
+          {/* Aliased Spectrum */}
+          <div style={styles.vizSection}>
+            <h3 style={styles.vizTitle}>Aliased Spectrum (0-5kHz)</h3>
+            {aliasedResult ? (
+              renderSpectrum(aliasedResult.spectrum, "Aliased Signal", "#e74c3c")
+            ) : (
+              <div style={styles.placeholder}>Apply aliasing to see frequency distortion</div>
+            )}
+          </div>
+
+          {/* Recovered Spectrum */}
+          <div style={styles.vizSection}>
+            <h3 style={styles.vizTitle}>Recovered Spectrum (0-5kHz)</h3>
+            {recoveredResult ? (
+              renderSpectrum(recoveredResult.spectrum_after, "Recovered Signal", "#27ae60")
+            ) : (
+              <div style={styles.placeholder}>Recover audio to see anti-aliasing results</div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
 const styles = {
-  pageContainer: { 
-    minHeight: "100vh", 
-    display: "flex", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    background: "#f0f4f8",
-    padding: "20px 0" 
+  pageContainer: {
+    minHeight: "100vh",
+    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    padding: "0",
+    margin: "0",
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
   },
-  card: { 
-    background: "#fff", 
-    borderRadius: "20px", 
-    boxShadow: "0 10px 30px rgba(0,0,0,0.1)", 
-    padding: "40px", 
-    textAlign: "center", 
-    maxWidth: "1200px", 
-    width: "95%" 
+  header: {
+    background: "rgba(255, 255, 255, 0.95)",
+    padding: "20px 40px",
+    boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+    textAlign: "center"
   },
-  title: { 
-    fontSize: "26px", 
-    marginBottom: "10px", 
-    color: "#001f3f" 
+  title: {
+    fontSize: "28px",
+    margin: "0",
+    color: "#2c3e50",
+    fontWeight: "600"
   },
-  button: { 
-    marginTop: "15px", 
-    padding: "10px 20px", 
-    backgroundColor: "#2055c0", 
-    color: "white", 
-    border: "none", 
-    borderRadius: "8px", 
-    cursor: "pointer", 
+  subtitle: {
+    fontSize: "14px",
+    margin: "5px 0 0 0",
+    color: "#7f8c8d"
+  },
+  mainContent: {
+    display: "grid",
+    gridTemplateColumns: "400px 1fr",
+    height: "calc(100vh - 80px)",
+    gap: "0"
+  },
+  leftPanel: {
+    background: "#f8f9fa",
+    padding: "20px",
+    overflowY: "auto",
+    borderRight: "1px solid #e0e0e0"
+  },
+  rightPanel: {
+    background: "#ffffff",
+    padding: "20px",
+    overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: "20px"
+  },
+  section: {
+    background: "white",
+    padding: "20px",
+    borderRadius: "8px",
+    marginBottom: "20px",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+    border: "1px solid #e0e0e0"
+  },
+  sectionTitle: {
+    fontSize: "16px",
     fontWeight: "600",
-    transition: "background-color 0.2s",
+    margin: "0 0 15px 0",
+    color: "#2c3e50",
+    borderBottom: "2px solid #3498db",
+    paddingBottom: "8px"
   },
-  resultBox: { 
-    marginTop: "20px", 
-    background: "#f9f9f9", 
-    padding: "15px", 
-    borderRadius: "10px", 
-    border: "1px solid #ddd" 
+  fileInput: {
+    width: "100%",
+    padding: "10px",
+    border: "2px dashed #bdc3c7",
+    borderRadius: "6px",
+    marginBottom: "15px",
+    fontSize: "14px"
   },
+  uploadButton: {
+    width: "100%",
+    padding: "12px",
+    backgroundColor: "#3498db",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 0.3s ease"
+  },
+  warningButton: {
+    width: "100%",
+    padding: "12px",
+    backgroundColor: "#e67e22",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+    marginTop: "10px"
+  },
+  successButton: {
+    width: "100%",
+    padding: "12px",
+    backgroundColor: "#27ae60",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+    marginTop: "10px"
+  },
+  infoBox: {
+    background: "#f8f9fa",
+    padding: "15px",
+    borderRadius: "6px",
+    fontSize: "14px",
+    lineHeight: "1.5"
+  },
+  controlBox: {
+    background: "#f8f9fa",
+    padding: "15px",
+    borderRadius: "6px"
+  },
+  sliderLabel: {
+    display: "block",
+    fontSize: "14px",
+    marginBottom: "10px",
+    color: "#2c3e50",
+    fontWeight: "600"
+  },
+  slider: {
+    width: "100%",
+    marginBottom: "8px"
+  },
+  sliderInfo: {
+    display: "flex",
+    justifyContent: "space-between",
+    fontSize: "12px",
+    color: "#7f8c8d",
+    marginBottom: "15px"
+  },
+  audioSection: {
+    margin: "15px 0"
+  },
+  audioPlayer: {
+    width: "100%",
+    borderRadius: "6px"
+  },
+  vizSection: {
+    background: "white",
+    padding: "20px",
+    borderRadius: "8px",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+    border: "1px solid #e0e0e0",
+    flex: "1",
+    minHeight: "350px"
+  },
+  vizTitle: {
+    fontSize: "16px",
+    fontWeight: "600",
+    margin: "0 0 15px 0",
+    color: "#2c3e50"
+  },
+  chartContainer: {
+    height: "280px",
+    width: "100%"
+  },
+  placeholder: {
+    height: "280px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#f8f9fa",
+    borderRadius: "6px",
+    color: "#7f8c8d",
+    fontSize: "14px",
+    border: "2px dashed #bdc3c7",
+    textAlign: "center",
+    padding: "20px"
+  }
 };
+
+// Add hover effects
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+  button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  }
+  
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+document.head.appendChild(styleSheet);
 
 export default VoiceGenderPage;
