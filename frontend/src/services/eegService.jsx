@@ -1,4 +1,3 @@
-// frontend/src/services/eegService.jsx
 import axios from "axios";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api/eeg";
@@ -21,10 +20,11 @@ export async function uploadEegFile(file) {
   }
 }
 
-export async function fetchEegSegments(filename, channels, resample_fs = null) {
+export async function fetchEegSegments(filename, channels, resample_fs = null, use_aliasing = false) {
   const params = {
     filename,
-    channels, // axios automatically handles array encoding
+    channels,
+    use_aliasing,
   };
   
   // Add resample_to parameter if provided
@@ -37,6 +37,8 @@ export async function fetchEegSegments(filename, channels, resample_fs = null) {
   try {
     const res = await axios.get(`${API_BASE_URL}/segments`, { params });
     console.log(' Segments received:', res.data.segments?.length || 0, 'segments');
+    console.log(' Resampling method:', res.data.resampling_method);
+    console.log(' Original FS:', res.data.original_fs, 'Current FS:', res.data.fs);
     return res.data;
   } catch (error) {
     console.error(' Fetch segments failed:', error.response?.data || error.message);
@@ -44,20 +46,31 @@ export async function fetchEegSegments(filename, channels, resample_fs = null) {
   }
 }
 
-export async function predictEegFile(file, model_fs = 256) {
+export async function predictEegFile(file, model_fs = 256, experiment_fs = null, use_aliasing = false) {
   const formData = new FormData();
   formData.append("file", file);
 
-  console.log(' Making prediction with model_fs:', model_fs);
+  // Build query parameters
+  let url = `${API_BASE_URL}/predict?model_fs=${model_fs}`;
+  
+  if (experiment_fs) {
+    url += `&experiment_fs=${experiment_fs}`;
+  }
+  
+  if (use_aliasing) {
+    url += `&use_aliasing=true`;
+  }
+
+  console.log(' Making prediction with:', { model_fs, experiment_fs, use_aliasing });
   
   try {
-    const res = await axios.post(`${API_BASE_URL}/predict?model_fs=${model_fs}`, formData, {
+    const res = await axios.post(url, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     console.log(' Prediction successful:', res.data);
     return res.data;
   } catch (error) {
     console.error(' Prediction failed:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.detail || 'Prediction failed');
+    throw new Error(error.response?.data?.error || 'Prediction failed');
   }
 }

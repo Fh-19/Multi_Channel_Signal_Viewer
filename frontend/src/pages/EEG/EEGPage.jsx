@@ -63,28 +63,40 @@ function EEGPage() {
   const segmentIndexRef = useRef(0);
   const intervalRef = useRef(null);
 
-  // NEW: Calculate dynamic chunk limit based on recording duration
-  const calculateDynamicChunkLimit = (durationSeconds, windowSizeSeconds) => {
-    const minimumChunks = 5;  // Always keep at least 5 chunks
-    const maximumChunks = 50; // Don't exceed 50 chunks for performance
+  // NEW: Performance-based chunk limit calculation for long recordings
+  const calculatePerformanceBasedChunkLimit = (durationSeconds, windowSizeSeconds, fs) => {
+    const minimumChunks = 5;
+    const maximumChunks = 150; 
     
-    if (durationSeconds <= windowSizeSeconds * 2) {
-      // Very short recording - use minimal chunks
-      setMaxXorChunks(Math.max(minimumChunks, 3));
-    } else if (durationSeconds <= 60) {
-      // Short recording (≤1 minute) - scale with duration
-      const chunks = Math.floor(durationSeconds / windowSizeSeconds);
-      setMaxXorChunks(Math.min(Math.max(chunks, minimumChunks), 20));
+    // Calculate total samples per chunk
+    const samplesPerChunk = Math.round(fs * windowSizeSeconds);
+    
+    // Estimate memory usage and processing time
+    const estimatedMemoryPerChunk = samplesPerChunk * 8; // bytes (assuming 64-bit floats)
+    const maxSafeMemory = 50 * 1024 * 1024; // 50MB safe limit for browser
+    const maxSafeChunksByMemory = Math.floor(maxSafeMemory / estimatedMemoryPerChunk);
+    
+    // Calculate based on duration
+    let durationBasedChunks;
+    if (durationSeconds <= 60) {
+      durationBasedChunks = Math.max(minimumChunks, Math.floor(durationSeconds / windowSizeSeconds));
     } else if (durationSeconds <= 300) {
-      // Medium recording (1-5 minutes)
-      const chunks = Math.floor(60 / windowSizeSeconds); // Base of 1 minute worth
-      setMaxXorChunks(Math.min(chunks + 10, 35));
+      durationBasedChunks = Math.floor(120 / windowSizeSeconds) + 10;
+    } else if (durationSeconds <= 900) {
+      // For 900-second files, aim for good temporal coverage
+      durationBasedChunks = Math.floor(300 / windowSizeSeconds) + 15; // Cover 5 minutes + buffer
     } else {
-      // Long recording (>5 minutes) - use larger but fixed limit
-      setMaxXorChunks(maximumChunks);
+      durationBasedChunks = Math.floor(600 / windowSizeSeconds) + 20; // Cover 10 minutes
     }
     
-    console.log(`Recording duration: ${durationSeconds}s, Window: ${windowSizeSeconds}s, Max XOR chunks: ${maxXorChunks}`);
+    // Use the most restrictive limit
+    const finalLimit = Math.min(maximumChunks, maxSafeChunksByMemory, durationBasedChunks);
+    
+    setMaxXorChunks(finalLimit);
+    
+    console.log(`Duration: ${durationSeconds}s, FS: ${fs}Hz, Window: ${windowSizeSeconds}s`);
+    console.log(`Samples per chunk: ${samplesPerChunk}, Memory safe: ${maxSafeChunksByMemory} chunks`);
+    console.log(`Duration based: ${durationBasedChunks} chunks, Final limit: ${finalLimit} chunks`);
   };
 
   // ----- Upload handler -----
@@ -120,12 +132,12 @@ function EEGPage() {
       setFs(meta.sfreq || 256);
       setOriginalFs(meta.sfreq || 256);
       setExperimentalFs(meta.sfreq || 256);
-      setRecordingDuration(meta.duration_seconds || 60); // Store actual duration
+      setRecordingDuration(meta.duration_seconds || 60);
       setBandPowerChannel(null);
       setXorChannel(null);
 
-      // Calculate initial chunk limit based on actual duration
-      calculateDynamicChunkLimit(meta.duration_seconds || 60, windowSeconds);
+      // NEW: Use performance-based calculation
+      calculatePerformanceBasedChunkLimit(meta.duration_seconds || 60, windowSeconds, meta.sfreq || 256);
 
       // reset state
       setSegments([]);
@@ -140,7 +152,6 @@ function EEGPage() {
     } catch (err) {
       console.error(err);
       alert("Upload failed. See console.");
-      // Reset loading state on error
       setIsLoading(false);
     }
   };
@@ -162,7 +173,6 @@ function EEGPage() {
         setRecurrencePoints([]);
         segmentIndexRef.current = 0;
         
-        // Reset loading state when segments are loaded and ready
         setTimeout(() => {
           setIsLoading(false);
           setIsResampling(false);
@@ -170,7 +180,6 @@ function EEGPage() {
       } catch (err) {
         console.error(err);
         alert("Could not load segments.");
-        // Reset loading state on error
         setIsLoading(false);
         setIsResampling(false);
       }
@@ -178,16 +187,15 @@ function EEGPage() {
     loadSegments();
   }, [filename, channels, experimentalFs]);
 
-  // ----- NEW: Recalculate XOR chunk limit when window size changes -----
+  // ----- NEW: Recalculate XOR chunk limit when window size or FS changes -----
   useEffect(() => {
     if (uploadedFile) {
-      calculateDynamicChunkLimit(recordingDuration, windowSeconds);
+      calculatePerformanceBasedChunkLimit(recordingDuration, windowSeconds, fs);
     }
-  }, [windowSeconds, recordingDuration, uploadedFile]);
+  }, [windowSeconds, recordingDuration, uploadedFile, fs]);
 
   // ----- Playback loop (segments -> buffer) -----
   useEffect(() => {
-    // stop previous interval
     clearInterval(intervalRef.current);
 
     if (!segments.length || !isPlaying || isLoading || isResampling) return;
@@ -229,7 +237,7 @@ function EEGPage() {
         return combined.length > maxLen ? combined.slice(-maxLen) : combined;
       });
 
-      // XOR Abnormalities Logic with dynamic chunk limits
+      // XOR Abnormalities Logic with dynamic chunk limits and sampling
       const windowSamples = Math.round(fs * windowSeconds);
       const selectedXorChannel = xorChannel || channels[0];
 
@@ -241,6 +249,15 @@ function EEGPage() {
           
           setXorChunks((prev) => {
             const activeChunks = prev.filter(chunk => !chunk.removed);
+            
+            // NEW: For very long recordings, sample chunks (every 2nd or 3rd)
+            const samplingRate = recordingDuration > 600 ? 2 : 1;
+            const shouldCollect = segmentIndexRef.current % samplingRate === 0;
+            
+            if (!shouldCollect && activeChunks.length > 5) {
+              return activeChunks; // Skip collection this time
+            }
+
             const newChunk = {
               samples: [...currentChunk],
               removed: false,
@@ -254,7 +271,6 @@ function EEGPage() {
             
             // DYNAMIC CHUNK LIMIT - based on recording duration
             if (updatedChunks.length > maxXorChunks) {
-              // Remove oldest chunks first
               return updatedChunks.slice(-maxXorChunks);
             }
             return updatedChunks;
@@ -290,7 +306,7 @@ function EEGPage() {
     }, intervalMs);
 
     return () => clearInterval(intervalRef.current);
-  }, [segments, channels, fs, isPlaying, playbackSpeed, windowSeconds, xorTolerance, recurrencePair, buffer, xorChannel, isLoading, isResampling, segmentTimes, maxXorChunks]);
+  }, [segments, channels, fs, isPlaying, playbackSpeed, windowSeconds, xorTolerance, recurrencePair, buffer, xorChannel, isLoading, isResampling, segmentTimes, maxXorChunks, recordingDuration]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -387,7 +403,6 @@ function EEGPage() {
           channels={channels}
           toggleChannel={toggleChannel}
           isLoading={isLoading || isResampling}
-          // NEW: Aliasing experiment props
           experimentalFs={experimentalFs}
           setExperimentalFs={setExperimentalFs}
           originalFs={originalFs}
@@ -468,7 +483,7 @@ function EEGPage() {
           polarMode={polarMode}
           setPolarMode={setPolarMode}
           isLoading={isLoading || isResampling}
-          maxXorChunks={maxXorChunks} // NEW: Pass to visualizations
+          maxXorChunks={maxXorChunks}
         />
       </div>
 

@@ -9,7 +9,7 @@ export default function XORVisualization({
   windowSeconds, 
   isLoading,
   xorTolerance,
-  maxXorChunks // NEW: Receive dynamic chunk limit
+  maxXorChunks
 }) {
   const [localThreshold, setLocalThreshold] = useState(xorTolerance);
   
@@ -54,10 +54,13 @@ export default function XORVisualization({
     const threshold = localThreshold;
     const windowSamples = Math.round(fs * windowSeconds);
     
+    // NEW: For many chunks, use sampling in time domain for performance
+    const timeSampling = activeChunks.length > 50 ? 2 : 1;
+    
     // First pass: collect all abnormalities
     const allAbnormalities = [];
     
-    for (let timeIdx = 0; timeIdx < windowSamples; timeIdx++) {
+    for (let timeIdx = 0; timeIdx < windowSamples; timeIdx += timeSampling) {
       const valuesAtThisTime = [];
       const chunksWithData = [];
       
@@ -175,7 +178,8 @@ export default function XORVisualization({
         threshold: threshold,
         chunksWithAbnormalities: chunksWithAbnormalities.size,
         timeCoverage: chunkStats.timeCoverage,
-        maxChunks: maxXorChunks
+        maxChunks: maxXorChunks,
+        timeSampling: timeSampling
       }
     };
   };
@@ -244,12 +248,18 @@ export default function XORVisualization({
           <div>
             <strong>Chunks: {scatterData.chunkInfo.totalChunks}/{scatterData.chunkInfo.maxChunks}</strong> 
             {` • Unique abnormalities: ${scatterData.chunkInfo.uniqueAbnormalities}`}
+            {scatterData.chunkInfo.timeSampling > 1 && ` • Time sampling: 1/${scatterData.chunkInfo.timeSampling}`}
           </div>
           <div style={{ fontSize: '11px', marginTop: '4px' }}>
             {scatterData.chunkInfo.timeCoverage} • Threshold: {scatterData.chunkInfo.threshold}µV
             {chunkStats.chunkLimitReached && (
               <span style={{ color: '#e24a33', fontWeight: 'bold', marginLeft: '8px' }}>
                 • Chunk limit reached - oldest chunks are being removed
+              </span>
+            )}
+            {scatterData.chunkInfo.timeSampling > 1 && (
+              <span style={{ color: '#fbc15e', fontWeight: 'bold', marginLeft: '8px' }}>
+                • Performance mode active
               </span>
             )}
           </div>
@@ -298,9 +308,14 @@ export default function XORVisualization({
               <span>
                 Chunks with abnormalities: {scatterData.chunkInfo.chunksWithAbnormalities}
               </span>
+              {scatterData.chunkInfo.timeSampling > 1 && (
+                <span style={{ color: "#fbc15e", fontWeight: "bold" }}>
+                   Performance mode
+                </span>
+              )}
               {chunkStats.chunkLimitReached && (
                 <span style={{ color: "#e24a33", fontWeight: "bold" }}>
-                  ⚠️ Chunk limit reached
+                   Chunk limit reached
                 </span>
               )}
             </div>
