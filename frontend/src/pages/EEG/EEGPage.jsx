@@ -76,6 +76,8 @@ function EEGPage() {
     const maxSafeMemory = 50 * 1024 * 1024; // 50MB safe limit for browser
     const maxSafeChunksByMemory = Math.floor(maxSafeMemory / estimatedMemoryPerChunk);
     
+    // const useAliasing = experimentalFs < 256;
+
     // Calculate based on duration
     let durationBasedChunks;
     if (durationSeconds <= 60) {
@@ -163,7 +165,7 @@ function EEGPage() {
     async function loadSegments() {
       try {
         setIsResampling(true);
-        const data = await fetchEegSegments(filename, channels, experimentalFs);
+        const data = await fetchEegSegments(filename, channels, experimentalFs, experimentalFs < 256);
         setSegments(data.segments || []);
         setSegmentTimes(data.segment_times || []);
         setFs(data.fs || experimentalFs);
