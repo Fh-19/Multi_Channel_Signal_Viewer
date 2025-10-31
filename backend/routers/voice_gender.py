@@ -39,6 +39,7 @@ async def predict_voice_gender(file: UploadFile = File(...)):
 
         waveform, sr = librosa.load(file_path, sr=None, mono=True)
         duration = librosa.get_duration(y=waveform, sr=sr)
+        #computes (frequency spectrum)of waveform
         fft = np.fft.fft(waveform)
         freqs = np.fft.fftfreq(len(fft), 1 / sr)
         magnitude = np.abs(fft)[: len(freqs)//2]
@@ -59,7 +60,7 @@ async def predict_voice_gender(file: UploadFile = File(...)):
         print(f">>> ERROR in predict_voice_gender: {e}")
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
     
-    
+
 # ---------------- 2. Aliasing effect ----------------
 @router.post("/aliasing")
 async def aliasing_effect(filename: str = Form(...), new_sr: int = Form(...)):
@@ -70,31 +71,38 @@ async def aliasing_effect(filename: str = Form(...), new_sr: int = Form(...)):
 
         waveform, sr = librosa.load(file_path, sr=None, mono=True)
 
-        # Ensure aliasing happens: new_sr < Nyquist
-        max_sr = sr // 2
-        if new_sr >= max_sr:
-            new_sr = max_sr
-            print(f">>> new_sr too high, automatically reduced to {new_sr} Hz for aliasing")
+        # Calculate Nyquist frequency (maximum representable frequency)
+        nyquist_freq = sr // 2
+        
+        # Remove the bug that prevents upsampling - allow any sampling rate
+        # The original code incorrectly limited new_sr to nyquist_freq, which prevented upsampling
+        print(f">>> Original SR: {sr} Hz, Target SR: {new_sr} Hz, Nyquist: {nyquist_freq} Hz")
 
         # Manual downsampling and upsampling without librosa
-        # Step 1: Downsample (decimate)
-        downsample_ratio = sr / new_sr
-        if downsample_ratio <= 1:
-            # If target sample rate is higher or equal, just use original
-            waveform_down = waveform
-        else:
+        # Step 1: Downsample (decimate) if target rate is lower
+        if new_sr < sr:
+            # Downsampling - this is where aliasing can occur
+            downsample_ratio = sr / new_sr
             # Manual downsampling by taking every nth sample
             indices = np.round(np.arange(0, len(waveform), downsample_ratio)).astype(int)
             indices = indices[indices < len(waveform)]  # Ensure we don't go out of bounds
-            waveform_down = waveform[indices]
-        
-        # Step 2: Upsample back to original sample rate (with interpolation)
-        # First, create the time arrays for both original and downsampled signals
-        t_original = np.arange(len(waveform)) / sr
-        t_downsampled = np.arange(len(waveform_down)) / new_sr
-        
-        # Use linear interpolation to resample back to original rate
-        aliased_waveform = np.interp(t_original, t_downsampled, waveform_down)
+            waveform_resampled = waveform[indices]
+        elif new_sr > sr:
+            # Upsampling - interpolate to higher rate
+            t_original = np.arange(len(waveform)) / sr
+            t_target = np.arange(0, len(waveform)/sr, 1/new_sr)
+            waveform_resampled = np.interp(t_target, t_original, waveform)
+        else:
+            # Same sampling rate
+            waveform_resampled = waveform
+
+        # Step 2: Always resample back to original sample rate to demonstrate aliasing effects
+        if len(waveform_resampled) > 0:
+            t_resampled = np.arange(len(waveform_resampled)) / new_sr
+            t_final = np.arange(len(waveform)) / sr
+            aliased_waveform = np.interp(t_final, t_resampled, waveform_resampled)
+        else:
+            aliased_waveform = waveform
 
         aliased_filename = f"aliased_{new_sr}_{filename}"
         aliased_path = os.path.join(UPLOAD_FOLDER, aliased_filename)
@@ -107,10 +115,17 @@ async def aliasing_effect(filename: str = Form(...), new_sr: int = Form(...)):
         magnitude = np.abs(fft)[: len(freqs)//2]
         freqs = freqs[: len(freqs)//2]
 
+        # Add information about the sampling scenario
+        scenario = "upsampling" if new_sr > sr else "downsampling" if new_sr < sr else "same_rate"
+        aliasing_risk = "HIGH" if new_sr < 2 * nyquist_freq else "LOW"
+
         return {
             "filename": aliased_filename,
             "original_sr": sr,
             "new_sr": new_sr,
+            "nyquist_freq": nyquist_freq,
+            "scenario": scenario,
+            "aliasing_risk": aliasing_risk,
             "gender": gender_after_alias,
             "file_url": f"http://127.0.0.1:8000/uploads/{aliased_filename}",
             "spectrum": {
