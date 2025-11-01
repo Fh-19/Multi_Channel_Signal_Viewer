@@ -76,8 +76,6 @@ function EEGPage() {
     const maxSafeMemory = 50 * 1024 * 1024; // 50MB safe limit for browser
     const maxSafeChunksByMemory = Math.floor(maxSafeMemory / estimatedMemoryPerChunk);
     
-    // const useAliasing = experimentalFs < 256;
-
     // Calculate based on duration
     let durationBasedChunks;
     if (durationSeconds <= 60) {

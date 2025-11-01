@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 import librosa
 import numpy as np
-import os
-
+from backend.services.doppler_processing import resample
 # -------------------------------
 # Define same model architecture
 # -------------------------------
@@ -68,8 +67,10 @@ def predict_doppler(file_path: str, target_sr: int = 22050):
     target_sr: target sample rate for processing (accepts any value between 8000-48000)
     """
     try:
-        # Load audio with specified target sample rate - librosa will handle any valid rate
-        y, sr = librosa.load(file_path, sr=target_sr)
+        # Load audio exactly as it is 
+        y, sr = librosa.load(file_path, sr=None)
+        # Resamples the file using the called resample function
+        y, sr = resample(y, sr, target_sr)
 
         # Compute mel spectrogram
         mel = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=n_mels)

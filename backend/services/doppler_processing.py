@@ -1,5 +1,4 @@
 import numpy as np
-import soundfile as sf
 import sounddevice as sd
 from scipy.signal import butter, filtfilt, iirpeak, fftconvolve
 
@@ -128,3 +127,28 @@ def DopplerShift(frequency, speed, play_sound=False, realistic=True, sampling_ra
             print(f"Could not play sound: {e}")
     
     return signal, sample_rate, base_freq
+
+def resample(y, orig_sr, target_sr):
+    """
+    Resample signal to target_sr without anti-aliasing filters.
+    - Downsampling: simply drop samples.
+    - Upsampling: linear interpolation (no filtering).
+    """
+    if orig_sr == target_sr:
+        return y, target_sr
+
+    ratio = target_sr / orig_sr
+
+    # Original and target time bases
+    t_original = np.arange(len(y)) / orig_sr
+    t_target = np.arange(0, len(y) / orig_sr, 1 / target_sr)
+
+    if target_sr < orig_sr:
+        # DOWNsampling: no filtering — just decimate
+        step = int(np.floor(orig_sr / target_sr))
+        y_resampled = y[::step]
+    else:
+        # UPsampling: use linear interpolation (no filter)
+        y_resampled = np.interp(t_target, t_original, y)
+
+    return y_resampled, target_sr
