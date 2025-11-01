@@ -113,11 +113,25 @@ export default function DopplerVisualization({
           layout={{
             height: 350,
             margin: { t: 10, r: 10, l: 40, b: 30 },
-            xaxis: { title: "Sample" },
-            yaxis: { title: "Amplitude" },
+            xaxis: {
+              title: "Sample",
+              rangeslider: { visible: true }, 
+              showspikes: true,
+            },
+            yaxis: {
+              title: "Amplitude",
+              fixedrange: false,
+            },
+          }}
+          config={{
+            responsive: true,
+            scrollZoom: true, 
+            displaylogo: false,
+            modeBarButtonsToRemove: ["resetScale2d"], // optional
           }}
           style={{ width: "100%" }}
         />
+
       ) : (
         <p style={{ color: "#666" }}>
           No waveform yet — upload a WAV file to visualize it.

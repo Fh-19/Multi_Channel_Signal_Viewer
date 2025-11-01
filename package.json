@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "seaborn": "^0.0.1-security",
+    "wavefile": "^11.0.0",
     "wavesurfer.js": "^7.11.0",
     "wfdb": "^0.0.9"
   },
