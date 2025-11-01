@@ -36,6 +36,13 @@ THE ECG Sigal Analysis Module provides advanced processing, visualization, and A
     4. If top-class confidence ≥ 0.3 → return that class.
     5. Otherwise, preprocess for binary model and classify as: "Normal ECG" or "Other Cardiac Abnormalities"
 
+`POST /resample`
+- Purpose: Demonstrates digital signal processing concepts by resampling ECG signals to different sampling rates, showing aliasing effects (downsampling) and interpolation effects (upsampling) in real-time.
+- Resampling types:
+    1. Downsampling (target_fs < original_fs): Causes aliasing
+    2. Upsampling (target_fs > original_fs): Shows interpolation
+    3. No change (target_fs = original_fs): Reference signal
+
 ## Signal Processing Pipeline:
 ### Signal Viewer Preprocessing Steps:
 - **Band-pass filtering**: 0.5-30 Hz to remove baseline wander, high-frequency muscle noise, powerline interference (50 Hz).
@@ -60,15 +67,39 @@ The pretrained models are trained on raw ECG signals.
 - Play/Pause with speed adjustment (0.5-1.5x).
 - Zoom in/out.
 
-<img width="1096" height="748" alt="image" src="https://github.com/user-attachments/assets/3937a04b-91b6-4759-bcb1-b3b573f8b185" />
-<img width="1149" height="780" alt="image" src="https://github.com/user-attachments/assets/1b50bf77-5e3d-4eeb-9dab-2d9a22798fc6" />
+## 1. Continuous Mode: 
+<img width="1294" height="853" alt="Screenshot 2025-11-01 203534" src="https://github.com/user-attachments/assets/2b56f11c-a845-4d69-a285-ae57695b275e" />  
+
+## 2. Cycle-based Mode:
+<img width="1299" height="862" alt="Screenshot 2025-11-01 203638" src="https://github.com/user-attachments/assets/72f0fa31-e048-4c94-8d7c-a506378bc756" />
+
 
 ## Predictions:
 - The output of the 6-class model is displayed along with the probability of each class, the predicted disease is the one with the highest probability.
-- If the highest probability is less than 30%, the predicted disease is the fallback binary model's output (Normal ECG or Other Cardiac Abnormalities).
-<img width="1860" height="856" alt="image" src="https://github.com/user-attachments/assets/1733ce9b-be7b-420e-91b9-81b56bedec90" />
-<img width="1861" height="859" alt="image" src="https://github.com/user-attachments/assets/94140aff-ac5f-490b-9b38-920cf1fcd86e" />
-<img width="1848" height="856" alt="image" src="https://github.com/user-attachments/assets/c2cd721e-2613-4684-8945-b71b7652e2f0" />
+- If the highest probability is less than 30%, the predicted disease is the fallback binary model's output (Normal ECG or Other Cardiac Abnormalities).  
+
+## 1. 6-Class Model Prediction Result:
+<img width="1886" height="854" alt="image" src="https://github.com/user-attachments/assets/5bb2a845-fef5-4d30-a830-b2c852d3bec1" />  
+
+## 2. Binary Fallback Model Prediction Results:
+<img width="1880" height="861" alt="image" src="https://github.com/user-attachments/assets/8714758d-3de5-4891-b86c-c019418b170a" />
+<img width="1875" height="856" alt="image" src="https://github.com/user-attachments/assets/e5aa209f-d8d4-4275-85d9-f6c7087a751a" />
+
+
+## Sampling frequency control:
+<img width="610" height="154" alt="Screenshot 2025-11-01 204407" src="https://github.com/user-attachments/assets/0c280d21-bce3-4769-885b-ef0ed9693b16" />  
+
+- Setting the target sampling frequency to be lower than the original sampling frequency (downsampling) causes signal aliasing and consequently the waveform distorts and the prediction results change.
+- Setting the target sampling frequency to be higher than the original sampling frequency (upsampling) inserts new samples between existing ones through interpolation which doesn't add new information, only makes the signal appear smoother, and changes predictions minimally.  
+
+## 1. Waveform and prediction results of an ECG record at the original sampling frequency:
+<img width="1878" height="864" alt="Screenshot 2025-11-01 204646" src="https://github.com/user-attachments/assets/d21e5da4-7723-4253-88e7-a6362aef8fe3" />  
+
+## 2. Waveform and prediction results of the same ECG record at lower sampling frequency than the original:
+<img width="1885" height="856" alt="Screenshot 2025-11-01 204750" src="https://github.com/user-attachments/assets/cfb5c6eb-6e01-47a7-948b-bf6dbb1e5194" />  
+
+## 3. Waveform and prediction results of the same ECG record at higher sampling frequency than the original:  
+<img width="1877" height="855" alt="image" src="https://github.com/user-attachments/assets/c670b9f0-44ff-4557-839a-737247142668" />  
 
 ## Advanced Visualizations:
 - User can switch between visualization modes using the dropdown and configure parameters specific to each one while monitoring real-time updates as data streams.
