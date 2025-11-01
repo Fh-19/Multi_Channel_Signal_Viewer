@@ -236,7 +236,8 @@ The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that
 
 - available preset buttons and a slider for precise control to demonstarate and experiment with different sampling frequencies
 - when using a lower than normal sample rate (lower than Nyquist frequency) the predictions and displayed signal change, the graphs has less points to plot causing the predictions to be wrong/has lower confidence than it used to and the bandpowers to not be accurate.
-  <img width="1896" height="894" alt="image" src="https://github.com/user-attachments/assets/14f17f59-0d7b-4c5c-838e-eb9fff8bf5a5" />
+
+<img width="1909" height="886" alt="image" src="https://github.com/user-attachments/assets/e619b1b3-bf05-4851-892a-937c96a52ba2" />
 
   # Doppler Shift Analysis Module
 The Doppler Shift Simulator is a sophisticated web application that demonstrates and analyzes the Doppler effect, a phenomenon where the frequency of a wave changes for an observer moving relative to the wave source. This module provides both simulation and analysis capabilities for Doppler shift phenomena, with a focus on realistic vehicle pass-by scenarios.
