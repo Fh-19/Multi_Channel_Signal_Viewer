@@ -16,7 +16,7 @@ export default function ECGSignalGraphs({
   aliasingWarning,
   displayFs
 }) {
-  console.log("ECGSignalGraphs rendering:", {
+  console.log("ECGSignalGraphs rendering:", { //to see if data deliver correctly
     signalsLength: signals.length,
     signalDataLength: signalData.length,
     fs,

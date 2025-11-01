@@ -102,7 +102,7 @@ export default function ECGPage() {
           fs: ecgData.fs,
           originalFs: ecgData.original_fs
         });
-        
+        // Set all the state with loaded data
         setSignals(ecgData.signals || []);
         const originalFsValue = ecgData.original_fs || ecgData.fs || 500;
         setFs(originalFsValue);
@@ -659,7 +659,7 @@ export default function ECGPage() {
     return { chunksToRemove: [], newChunkIsDuplicate: false };
   };
 
-  // Handle play/pause with restart capability
+  // Handle play/pause with restart capability , stops playback by clear timer and update state
   const handlePlayPause = () => {
     if (isPlaying) {
       // Pause playback

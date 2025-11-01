@@ -33,7 +33,7 @@ if not os.path.exists(BINARY_MODEL_PATH):
     raise RuntimeError(f"Binary model not found at: {BINARY_MODEL_PATH}")
 
 binary_model = load_model(BINARY_MODEL_PATH, compile=False)
-
+# used for making classification request for your ECG model
 class ClassifyRequest(BaseModel):
     record_number: str
     data_folder: str = "services/data"
@@ -130,10 +130,10 @@ def get_resampling_explanation(original_fs, target_fs):
     else:
         return f" NO CHANGE: Sampling rate remains at {original_fs} Hz."
 
-# --- WebSocket streaming ECG samples (unchanged) ---
+# --- WebSocket streaming ECG samples (unchanged) ---(for real time sreaming of ecG data)
 @router.websocket("/ws/ecg/{record_number}")
 async def stream_ecg(websocket: WebSocket, record_number: str):
-    await websocket.accept()
+    await websocket.accept() #must be called before data exchange
     try:
         signals, fs = dsp.load_ecg_record(record_number)
         r_peaks = dsp.get_r_peaks(signals, fs, lead=0)

@@ -10,7 +10,7 @@ const DISEASE_COLORS = {
   "AF": "#FBC15E",
   "ST": "#8EBA42"
 };
-
+// receives all data and satae setters as props from parent components
 export default function ECGAnalysis({
   filename,
   prediction,
@@ -28,20 +28,20 @@ export default function ECGAnalysis({
   setIsPredicting,
   displayFs
 }) {
-  // Handle prediction with proper error handling and results
+  // Ensures a file is uploaded before attempting prediction.
 const handlePredict = async () => {
   if (!filename) {
     alert("Please upload an ECG file first.");
     return;
   }
-  
+  //delete the pervious result before new prediction:
   setIsPredicting(true);
   setPrediction(null);
   setPredictionProbs(null);
 
   try {
     // Pass the actual sampling rate (fs) instead of empty string
-    const result = await classifyWithSampling(filename, displayFs);
+    const result = await classifyWithSampling(filename, displayFs); // get the result
     
     // Set prediction results based on the actual API response structure
     if (result && result.prediction) {
@@ -83,7 +83,7 @@ const handlePredict = async () => {
       'RBBB': 'Right Bundle Branch Block',
       '1dAVb': 'First-degree Atrioventricular Block',
     };
-
+    // prepare data for charts 
     const diseases = Object.keys(predictionProbs);
     const values = diseases.map((d) => predictionProbs[d] * 100);
 

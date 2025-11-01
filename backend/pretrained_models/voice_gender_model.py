@@ -3,7 +3,7 @@ import librosa
 from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
 import numpy as np
 
-# تحميل الموديل من هاجينج فيس
+# download model from hugging face
 MODEL_NAME = "alefiury/wav2vec2-large-xlsr-53-gender-recognition-librispeech"
 
 # Initialize as None - will load only when needed
