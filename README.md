@@ -1,3 +1,125 @@
+# Task2 :
+# voice classification , aliasing & anti aliasing:
+This project performs voice gender recognition using a pretrained deep learning model and demonstrates aliasing and anti-aliasing recovery effects in digital audio processing.
+It consists of three main components:
+
+-**Model Module (PyTorch + Hugging Face)**
+-**Backend (FastAPI)**
+-**Frontend (React + Chart.js)**
+## voice_gender_model.py:
+This module loads a pretrained gender recognition model from Hugging Face and predicts whether a given voice sample is Male, Female, or Unknown.
+
+Model Used:
+**alefiury/wav2vec2-large-xlsr-53-gender-recognition-librispeech**
+This model is based on Wav2Vec2, fine-tuned for gender classification.
+
+Key Functions:
+load_model()
+-Loads the model and feature extractor only once to optimize performance.
+-Prevents re-downloading the model multiple times.
+-predict_gender_from_file(file_path: str)
+-Accepts a .wav file path.
+-Loads the audio using librosa (mono, 16 kHz).
+-Converts the waveform to float32.
+-Passes the waveform to the model via the Hugging Face feature extractor.
+-Returns one of the following:
+"Male"
+"Female"
+"Unknown"
+Or an error message if prediction fails.
+
+Model Workflow:
+-Audio file is read at 16 kHz mono.
+-Converted into model-compatible tensors.
+-Model outputs logits → highest value determines the class.
+-Label is converted to readable text.
+
+## routers.backend.voice_gender.py :
+The backend handles file uploads, performs gender predictions, simulates aliasing effects, and demonstrates digital signal recovery.
+It exposes REST API endpoints for the frontend.
+
+API Endpoints:
+**1. -/predict:**
+-Uploads an audio file and returns:
+-File name
+-Detected gender
+-Sampling rate
+-Duration
+-Frequency spectrum (FFT)
+
+Backend actions:
+-Saves uploaded file to uploads/
+-Reads waveform using librosa
+-Performs FFT to compute frequency magnitude
+-Calls predict_gender_from_file for classification
+
+**2. /aliasing:**
+-Simulates aliasing by resampling the audio at a lower sampling rate (downsampling).
+
+Parameters:
+-filename: existing audio file name
+-new_sr: target sampling rate
+
+Processing steps:
+-Load the original file.
+-Manually downsample (reduces sample rate, causing aliasing).
+-Save the aliased waveform as a new file.
+-Perform gender prediction again on the distorted signal.
+
+Return:
+-Original and new sample rates
+-Nyquist frequency
+-Aliasing risk level
+-Updated gender prediction
+-Frequency spectrum of the aliased signal
+
+**3. /recover:**
+-Applies digital signal processing (DSP) to recover the aliased signal.
+
+Processing pipeline:
+-Oversample (increase sample rate by ×4).
+-Apply low-pass Butterworth filter to remove high-frequency noise.
+-Apply Gaussian smoothing.
+-Downsample back to the original rate.
+-Normalize the audio.
+-Save and analyze the recovered file.
+-Predict gender again.
+-Return both before and after frequency spectra.
+
+**4. /test:**
+Simple test endpoint to verify the router is active.
+
+Returns:
+-Server status message
+-Model availability
+-Timestamp
+
+## frontend.VoiceGenderPage.jsx:
+The React frontend provides an interactive interface for uploading audio files, applying aliasing, and observing recovery results with dynamic frequency spectrum plots.
+
+Main Features:
+-Upload .wav file
+  Displays the original waveform and predicted gender.
+-Aliasing simulation
+  Lets the user select a lower sampling rate using a slider.
+  Visualizes how frequency distortion appears.
+-Audio recovery
+  Applies DSP recovery on the aliased signal.
+  Shows recovered spectrum and updated gender prediction.
+-Visualization
+  Uses Chart.js (Line chart) to plot FFT spectra.
+  Displays:
+   -Original Spectrum
+   -Aliased Spectrum
+   -Recovered Spectrum
+
+Main React States:
+-file: uploaded audio file
+-result: original prediction response
+-aliasedResult: data after aliasing
+-recoveredResult: data after recovery
+-freq: selected aliasing sampling rate
+-loading: API request state
 
 # Multi-Channel Signal Viewer:
 ## Project Overview
@@ -110,7 +232,7 @@ The pretrained models are trained on raw ECG signals.
 # EEG Signal Analysis Module:
 The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that provides advanced processing, visualization, and AI-powered interpretation of electroencephalography (EEG) signals. This page is responsible for classifying between five classes (Dementia, Alzheimer's, Schizophrenia, Epilepsy, and Healthy) using a pre-trained simplified EEGNet model.
 
-<img width="1908" height="881" alt="Image" src="https://github.com/user-attachments/assets/e80dc493-7d94-44c1-bd3b-08a322885eaf" />
+<img width="1919" height="977" alt="Image" src="https://github.com/user-attachments/assets/9ce1d555-1aef-4b19-9be9-36c1d2789793" />
 
 **Any details about the trained model can be found in the notebook `final_eeg_model.ipynb`**
 
@@ -122,7 +244,7 @@ The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that
 
 `GET /segments`
 - Purpose: Retrieve processed EEG segments
-- Expected paraeters:
+- Parameters:
 
 `filename`: Target file
 
@@ -134,10 +256,7 @@ The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that
 
 `resample_to`: Target sampling rate
 
-`use_aliasing`: boolean indicating whether to use aliasing or not.
-
 - Output: Standardized signal segments in microvolts.
-- If the user requested aliasing, `resample_with_aliasing` is called from the processing file, and after minimal processing is applied
 
 `POST /predict`
 - Purpose: Disease classification using the pretrained model
@@ -147,62 +266,48 @@ The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that
      1. Signal preprocessing (bandpass filtering, notch filtering)
 
      2. Channel selection (first 19 channels)
-    
-     3. Same pattern as `/segments`: either aliasing-decimate then minimal filtering (intentionally preserving aliasing artifacts), or perform full `preprocess_raw`.
 
-     4. Standardization (z-score normalization)
+     3. Standardization (z-score normalization)
 
-     5. Sliding window segmentation (256 samples, 128 steps)
+     4. Sliding window segmentation (256 samples, 128 steps)
 
-     6. Batch inference with ensemble averaging
+     5. Batch inference with ensemble averaging
 
 - Output: Prediction probabilities for all classes.
 
 ## Signal Processing Pipeline
 - Preprocessing steps
-1. **Band-pass Filtering:** applies a band-pass between `highpass` and `h_freq` (which is decided according to the sampling frequency) to remove DC drift and high-frequency noise
+1. **Band-pass Filtering:** 0.5-40 Hz to remove DC drift and high-frequency noise
 2. **Notch Filtering:** 50/100 Hz for power-line noise removal
-3. **Common Average Reference:** sets an average reference across the channels.
-4. **Resampling:** Optional resampling 
+3. **Common Average Reference:** Spatial filtering
+4. **Resampling:** Optional downsampling to reduce computational load
 5. **Standardization:** Per-channel z-score normalization
 
-## `resample_with_aliasing(raw, target_fs: float)`:
-- Works on a copy to avoid mutating the input. If target_fs equals current_fs, return unchanged.
-- calculates a `decimation_factor` to determmine how many samples correspond to one new sample, designed to downsample by decimating without filtering
-- Upsampling is handled by the predefined function `resample_to` in MNE, which can automatically interpolate missing values.
-  
 ## Visualization Features
 - Multi-channel Traces: Real-time scrolling display of selected channels
 - Adjustable Window: Configurable time window (1-60 seconds)
 - Playback Controls: Play/pause with speed adjustment (0.25x-4x)
 - Channel Selection: Interactive toggle for up to 5 channels
-- Zoom in/out.
-- Recording information: displayed below the prediction and bandpower graphs.
-  
-<img width="1275" height="817" alt="image" src="https://github.com/user-attachments/assets/ca55c424-e831-4632-b587-3004c0a18ef7" />
-<img width="559" height="232" alt="image" src="https://github.com/user-attachments/assets/4e720a3b-80b3-48c2-bc73-56daf7c44668" />
+- Zoom in/out
+<img width="1254" height="831" alt="Image" src="https://github.com/user-attachments/assets/4c38d7be-77a4-4207-b728-6f3b82be61d0" />
+<img width="1281" height="782" alt="Image" src="https://github.com/user-attachments/assets/fac48173-7603-4033-adc4-f3a01256b2b7" />
 
 ## Predictions and Bandpower Section:
 - FFT-based power spectral density calculation of the 5 frequency bands and display of the relative power percentages of the selected channel per window.
 - Real-time Classification of the uploaded file via a probability visualization, a horizontal bar chart with color coding, and confidence scoring.
-- Recording information showing the `Sampling Rate`, `Selected Channels`, `Window Size` and `Status`.  
-   <img width="550" height="575" alt="Image" src="https://github.com/user-attachments/assets/be55901b-cb14-4be1-b297-a231aa7b45fb" />
-   <img width="565" height="661" alt="image" src="https://github.com/user-attachments/assets/1ca56988-4ad1-4aef-998a-ae0398085d8f" />
-
+   <img width="648" height="886" alt="Image" src="https://github.com/user-attachments/assets/b32b2788-b325-4573-8b36-78387b72c0c7" />
+  
 ## Advanced Visualizations:
 - User can switch between visualization modes using the dropdown and configure parameters specific to each one while monitoring real-time updates as data streams 
 1. `XOR Overlay`
-- Purpose: Detect unique abnormalities across time segments.
-- Mechanism:
-    - Point-wise comparison using a set similarity threshold.
-    - Number of chunks are calculated based on the duration of the file itself. 
+- Purpose: Pattern similarity detection across time segments
+- Mechanism: Compares signal chunks using mean absolute difference
 - Controls:
-     - Tolerance threshold (µV) for similarity detection.
-     - Channel selection for analysis.
-     - Manual reset capability.
-- Use Case: Identifying recurrent pathological patterns.
-  
-  <img width="846" height="830" alt="image" src="https://github.com/user-attachments/assets/4b6fc571-dedf-43dd-9cb0-f56ea18b5ba3" />
+     - Tolerance threshold (µV) for similarity detection
+     - Channel selection for analysis
+     - Manual reset capability
+- Use Case: Identifying recurrent pathological patterns
+  <img width="963" height="612" alt="Image" src="https://github.com/user-attachments/assets/9314b27b-b129-4df4-a5e5-8f4057836261" />
 
 2. `Polar Plot`
 - Modes:
@@ -230,15 +335,6 @@ The EEG Signal Analysis Module is a comprehensive neuroinformatics platform that
 - Configuration: Select any two channels for cross-channel analysis
 - Insights: Non-linear dynamics and inter-channel dependencies
 
-## Sampling frequency control:
-
-<img width="618" height="201" alt="image" src="https://github.com/user-attachments/assets/dc32d2e1-a7e7-433e-93b7-f9cd5d7cff54" />
-
-- available preset buttons and a slider for precise control to demonstarate and experiment with different sampling frequencies
-- when using a lower than normal sample rate (lower than Nyquist frequency) the predictions and displayed signal change, the graphs has less points to plot causing the predictions to be wrong/has lower confidence than it used to and the bandpowers to not be accurate.
-
-<img width="1909" height="886" alt="image" src="https://github.com/user-attachments/assets/e619b1b3-bf05-4851-892a-937c96a52ba2" />
-
   # Doppler Shift Analysis Module
 The Doppler Shift Simulator is a sophisticated web application that demonstrates and analyzes the Doppler effect, a phenomenon where the frequency of a wave changes for an observer moving relative to the wave source. This module provides both simulation and analysis capabilities for Doppler shift phenomena, with a focus on realistic vehicle pass-by scenarios.
 
@@ -252,28 +348,21 @@ where:
 `v_sound` = Speed of sound
 `v_relative` = Relative velocity between source and observer
 
-<img width="1915" height="889" alt="image" src="https://github.com/user-attachments/assets/b29d71c2-baec-4569-98d5-856ddea2d1ee" />
+<img width="1915" height="876" alt="Image" src="https://github.com/user-attachments/assets/6a5dd458-948a-406f-a5df-d1c513778aaf" />
 
 ## Realistic simulation Components:
 - **Engine Harmonics**: Multiple frequency components with proper ratios
 - **Distance Attenuation**: Inverse-square law intensity variation
 - **Spatial Audio**: Stereo panning based on vehicle position
-- **Environmental Effects**: Road noise and vibration.
+- **Environmental Effects**: Road noise, reverberation, vibration
 - **RPM Variation**: Realistic engine acceleration/deceleration profiles
 
 ## Audio Processing
-- Sample Rate: default is 22.05 kHz unless specified.
-- Format: Mono WAV files.
-- Duration: 8 seconds (realistic simulation).
-- Dynamic Range: Normalized to prevent clipping.
-
-## Sampling frequency control
-- A slider is provided to choose a sampling frequency in the range of 1.6 KHz to 44.1 KHz along with preset value buttons.
-- Choosing a frequency lower than the nyquist frequency or uploading a file with a much higher sampling frequency than the sampling frequency set for the prediction pipeline will cause inaccurate predictions.
-- an example file whose original sampling rate is 22.05 KHz and was generated with a frequency of 300 Hz and a speed of 100 Km/hr, is set to be predicted using a sampling frequency of 1.6 KHz :
-
-<img width="989" height="826" alt="image" src="https://github.com/user-attachments/assets/2be4f96b-ab09-48ad-a79c-d546dc6fd13e" />
-
+- Sample Rate: 44.1 kHz
+- Format: Mono WAV files
+- Duration: 8 seconds (realistic simulation)
+- Dynamic Range: Normalized to prevent clipping
+  
 ## Module Features:
 1. Dual Simulation Modes:
      - **Realistic Car Simulation**:
@@ -289,16 +378,12 @@ where:
      - X-axis: Time domain (sample index)
      - Y-axis: Amplitude (normalized between -1.0 and +1.0)
      - Visual Pattern: Shows the characteristic "Doppler sweep" where frequency changes as the sound source moves.
-     - horizontal and vertical zooming.
-  <img width="996" height="612" alt="image" src="https://github.com/user-attachments/assets/0d78c563-7bbb-42aa-84ce-9efdc35d7ec8" />
-
 4. Prediction Dashboard
-   <img width="994" height="835" alt="image" src="https://github.com/user-attachments/assets/41c6e7d3-ae64-4fba-b0ee-5d8cee47c905" />
+   <img width="1919" height="881" alt="Image" src="https://github.com/user-attachments/assets/fcb0719e-414b-465f-a38a-5948ec19a8af" />
 - Approaching Phase: Waveform shows higher frequency (closer spacing between peaks)
 - Passing Point: Maximum frequency at closest approach
 - Receding Phase: Lower frequency (wider spacing between peaks)
 - Amplitude Envelope: Louder when closer, quieter when farther due to distance attenuation
-- A preview of `Current Sampling Rate`, `Uploaded File Sample Rate` and `Prediction Sample Rate`
 
 #  Drone vs Noise Audio Classification System
 
@@ -347,6 +432,20 @@ The backend provides endpoints to upload an audio file, extract features, and ma
 -Feature Extractor — same MFCC logic used in training.
 
 -Prediction Endpoint — takes an uploaded .wav file, runs inference, and returns label + confidence.
+**New feature:aliasing :**
+backend:
+ -Endpoint: POST /alias
+ -Accepts:
+   Uploaded audio file
+   Target resampling rate (rate)
+ -Resamples the audio using librosa.resample()
+ -Saves the aliased version of the file and its       
+  Mel-spectrogram
+ -Extracts MFCCs and re-runs the Drone vs Noise    
+  prediction
+ -Returns:
+   Predicted label and confidence
+  URLs for the aliased audio and spectrogram
 
 ### frontend ('ApiPage.jsx)
 The React-based frontend allows users to upload an audio file and view the prediction in real time.
@@ -368,6 +467,21 @@ Example User Flow:
 
 -Left Panel: Audio upload & playback
 -Right Panel: Prediction result display
+
+**frontend for aliasing:**
+-Added aliasing input field for sampling rate (Hz)
+-Added “Apply Aliasing” button that sends file + rate   
+ to /alias
+-Displays:
+  Aliased waveform (using WaveSurfer.js)
+  Aliased spectrogram returned from backend
+  New predicted label and confidence after aliasing
+
+Example UI flow:
+-Upload an audio file
+-Enter a lower sample rate (e.g., 8000 Hz)
+-Click Apply Aliasing
+-Observe the aliased sound, distorted spectrogram, and changed prediction
 
 
 # SAR Land Classification System
