@@ -228,7 +228,7 @@ The pretrained models are trained on raw ECG signals.
 - All advanced modes depend on the cycle-by-cycle viewer (they update cycle by cycle).
 1. `XOR Graph`:
  - Purpose: Highlight irregularities and differences between consecutive cycles, making it easier to detect abnormal or inconsistent cardiac patterns.
- - Mechanism: Compares signal values at all sampling points throughout all cyles using an accumulating xor operation:
+ - Mechanism: Compares signal values at all sampling points throughout all cyles using an accumulating xor operation:  
    <img width="366" height="236" alt="image" src="https://github.com/user-attachments/assets/0663fd78-7631-49bc-9b10-05fa3130b38b" />
 
  - Controls:
