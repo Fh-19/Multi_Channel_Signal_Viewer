@@ -228,13 +228,14 @@ The pretrained models are trained on raw ECG signals.
 - All advanced modes depend on the cycle-by-cycle viewer (they update cycle by cycle).
 1. `XOR Graph`:
  - Purpose: Highlight irregularities and differences between consecutive cycles, making it easier to detect abnormal or inconsistent cardiac patterns.
- - Mechanism: Compares signal chunks using mean absolute difference.
+ - Mechanism: Compares signal values at all sampling points throughout all cyles using an accumulating xor operation:
+   <img width="366" height="236" alt="image" src="https://github.com/user-attachments/assets/0663fd78-7631-49bc-9b10-05fa3130b38b" />
+
  - Controls:
    - XOR tolerance (V) for similarity detection.
-   - Window size (xR-R).
    - Lead Selection (Single lead).
    - Reset plot.
-   <img width="1026" height="645" alt="image" src="https://github.com/user-attachments/assets/a1ff4c9e-4c17-429b-b2f4-3628f6339d63" />
+  <img width="877" height="790" alt="image" src="https://github.com/user-attachments/assets/a93a8a0c-df9f-4785-b09f-8191a4738728" />
   
 2. `Recurrence Graph`:
   - Purpose: Analyze cross-lead relationships (Only two leads can be selected for this mode).
