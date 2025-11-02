@@ -44,7 +44,7 @@ const VoiceGenderPage = () => {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setResult(res.data);
-      setFreq(Math.floor(res.data.sampling_rate / 4));
+      // setFreq(Math.floor(res.data.sampling_rate / 4));
     } catch (err) {
       console.error(err);
       alert("Error uploading file. Check backend.");

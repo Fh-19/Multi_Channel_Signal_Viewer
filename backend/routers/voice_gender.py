@@ -1,5 +1,4 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from backend.pretrained_models.voice_gender_model import predict_gender_from_file
 import os, shutil
 import librosa, soundfile as sf
 import numpy as np
@@ -22,6 +21,7 @@ except Exception as e:
     print(f">>> Model import failed: {e}")
 
 def safe_predict_gender(file_path):
+    """Safely predict gender with error handling"""
     if not MODEL_AVAILABLE:
         return "Model not available"
     try:
@@ -29,21 +29,163 @@ def safe_predict_gender(file_path):
     except Exception as e:
         return f"Prediction error: {str(e)}"
 
+def compute_fft_spectrum(waveform, sr, downsample_factor=200, max_frequency=None):
+    """
+    Compute FFT spectrum with configurable downsampling and frequency range
+    
+    Args:
+        waveform: Audio signal as numpy array
+        sr: Sampling rate in Hz
+        downsample_factor: Factor to reduce data points for efficient transmission
+        max_frequency: Maximum frequency to include (None for full spectrum)
+    
+    Returns:
+        Dictionary with frequency and magnitude arrays
+    """
+    # Compute FFT
+    fft = np.fft.fft(waveform)
+    freqs = np.fft.fftfreq(len(fft), 1 / sr)
+    
+    # Take only positive frequencies (real signal symmetry)
+    positive_mask = freqs >= 0
+    freqs = freqs[positive_mask]
+    magnitude = np.abs(fft)[positive_mask]
+    
+    # Apply frequency range limit if specified
+    if max_frequency is not None:
+        freq_mask = freqs <= max_frequency
+        freqs = freqs[freq_mask]
+        magnitude = magnitude[freq_mask]
+    
+    # Downsample for efficient transmission while preserving spectral shape
+    if downsample_factor > 1 and len(freqs) > downsample_factor:
+        # Use max magnitude in each chunk to preserve spectral peaks
+        num_chunks = len(freqs) // downsample_factor
+        downsampled_freqs = []
+        downsampled_magnitude = []
+        
+        for i in range(num_chunks):
+            start_idx = i * downsample_factor
+            end_idx = start_idx + downsample_factor
+            
+            chunk_freqs = freqs[start_idx:end_idx]
+            chunk_magnitude = magnitude[start_idx:end_idx]
+            
+            # Average frequencies, but keep peak magnitude to preserve spectral features
+            avg_freq = np.mean(chunk_freqs)
+            peak_magnitude = np.max(chunk_magnitude)
+            
+            downsampled_freqs.append(float(avg_freq))
+            downsampled_magnitude.append(float(peak_magnitude))
+        
+        # Handle remaining samples if any
+        remaining_start = num_chunks * downsample_factor
+        if remaining_start < len(freqs):
+            downsampled_freqs.append(float(np.mean(freqs[remaining_start:])))
+            downsampled_magnitude.append(float(np.max(magnitude[remaining_start:])))
+        
+        freqs = downsampled_freqs
+        magnitude = downsampled_magnitude
+    else:
+        # Convert to Python native types
+        freqs = freqs.tolist()
+        magnitude = magnitude.tolist()
+    
+    return {
+        "freqs": freqs,
+        "magnitude": magnitude
+    }
+
+def apply_aliasing_resampling(waveform, original_sr, target_sr):
+    """
+    Apply manual resampling to create aliasing effects
+    
+    Args:
+        waveform: Original audio signal
+        original_sr: Original sampling rate
+        target_sr: Target sampling rate for resampling
+    
+    Returns:
+        Resampled waveform at original_sr with aliasing effects
+    """
+    # Manual resampling without anti-aliasing filters
+    if target_sr < original_sr:
+        # Downsampling - causes aliasing
+        downsample_ratio = original_sr / target_sr
+        indices = np.round(np.arange(0, len(waveform), downsample_ratio)).astype(int)
+        indices = indices[indices < len(waveform)]  # Ensure bounds
+        waveform_resampled = waveform[indices]
+    elif target_sr > original_sr:
+        # Upsampling - causes imaging
+        t_original = np.arange(len(waveform)) / original_sr
+        t_target = np.arange(0, len(waveform)/original_sr, 1/target_sr)
+        waveform_resampled = np.interp(t_target, t_original, waveform)
+    else:
+        # Same sampling rate
+        waveform_resampled = waveform
+
+    # Resample back to original rate for comparison
+    if len(waveform_resampled) > 0:
+        t_resampled = np.arange(len(waveform_resampled)) / target_sr
+        t_final = np.arange(len(waveform)) / original_sr
+        aliased_waveform = np.interp(t_final, t_resampled, waveform_resampled)
+    else:
+        aliased_waveform = waveform
+    
+    return aliased_waveform
+
+def apply_anti_aliasing_recovery(waveform, sr):
+    """
+    Apply DSP recovery pipeline to remove aliasing artifacts
+    
+    Args:
+        waveform: Aliased audio signal
+        sr: Sampling rate
+    
+    Returns:
+        Recovered waveform with reduced aliasing
+    """
+    # ---------- Step 1: Oversample ----------
+    up_sr = sr * 4  # 4x oversampling
+    upsampled = librosa.resample(waveform, orig_sr=sr, target_sr=up_sr)
+
+    # ---------- Step 2: Low-pass filter ----------
+    cutoff = sr / 3  # Conservative cutoff
+    order = 6
+    b, a = butter(order, cutoff / (up_sr / 2), btype='low')
+    filtered_stage1 = filtfilt(b, a, upsampled)
+
+    # ---------- Step 3: Gaussian smoothing ----------
+    window = windows.gaussian(101, std=15)
+    window /= np.sum(window)
+    filtered_stage2 = convolve1d(filtered_stage1, window, mode='reflect')
+
+    # ---------- Step 4: Downsample ----------
+    recovered = librosa.resample(filtered_stage2, orig_sr=up_sr, target_sr=sr)
+
+    # ---------- Step 5: Normalize ----------
+    recovered = recovered / np.max(np.abs(recovered) + 1e-8)
+
+    return recovered
+
 # ---------------- 1. Original prediction ----------------
 @router.post("/predict")
 async def predict_voice_gender(file: UploadFile = File(...)):
+    """Analyze voice gender and compute frequency spectrum"""
     try:
+        # Save uploaded file
         file_path = os.path.join(UPLOAD_FOLDER, file.filename)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
+        # Load and analyze audio
         waveform, sr = librosa.load(file_path, sr=None, mono=True)
         duration = librosa.get_duration(y=waveform, sr=sr)
-        #computes (frequency spectrum)of waveform
-        fft = np.fft.fft(waveform)
-        freqs = np.fft.fftfreq(len(fft), 1 / sr)
-        magnitude = np.abs(fft)[: len(freqs)//2]
-        freqs = freqs[: len(freqs)//2]
+        
+        # Compute frequency spectrum
+        spectrum = compute_fft_spectrum(waveform, sr, downsample_factor=200, max_frequency=5000)
+        
+        # Predict gender
         gender = safe_predict_gender(file_path)
 
         return {
@@ -51,71 +193,43 @@ async def predict_voice_gender(file: UploadFile = File(...)):
             "gender": gender,
             "sampling_rate": sr,
             "duration": duration,
-            "spectrum": {
-                "freqs": freqs.tolist()[::200],
-                "magnitude": magnitude.tolist()[::200]
-            }
+            "spectrum": spectrum
         }
     except Exception as e:
         print(f">>> ERROR in predict_voice_gender: {e}")
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
-    
 
 # ---------------- 2. Aliasing effect ----------------
 @router.post("/aliasing")
 async def aliasing_effect(filename: str = Form(...), new_sr: int = Form(...)):
+    """Apply aliasing effects through manual resampling"""
     try:
         file_path = os.path.join(UPLOAD_FOLDER, filename)
         if not os.path.exists(file_path):
-            return {"error": "File not found!"}
+            raise HTTPException(status_code=404, detail="File not found!")
 
+        # Load original audio
         waveform, sr = librosa.load(file_path, sr=None, mono=True)
 
-        # Calculate Nyquist frequency (maximum representable frequency)
+        # Calculate Nyquist frequency and aliasing risk
         nyquist_freq = sr // 2
-        
-        # Remove the bug that prevents upsampling - allow any sampling rate
-        # The original code incorrectly limited new_sr to nyquist_freq, which prevented upsampling
         print(f">>> Original SR: {sr} Hz, Target SR: {new_sr} Hz, Nyquist: {nyquist_freq} Hz")
 
-        # Manual downsampling and upsampling without librosa
-        # Step 1: Downsample (decimate) if target rate is lower
-        if new_sr < sr:
-            # Downsampling - this is where aliasing can occur
-            downsample_ratio = sr / new_sr
-            # Manual downsampling by taking every nth sample
-            indices = np.round(np.arange(0, len(waveform), downsample_ratio)).astype(int)
-            indices = indices[indices < len(waveform)]  # Ensure we don't go out of bounds
-            waveform_resampled = waveform[indices]
-        elif new_sr > sr:
-            # Upsampling - interpolate to higher rate
-            t_original = np.arange(len(waveform)) / sr
-            t_target = np.arange(0, len(waveform)/sr, 1/new_sr)
-            waveform_resampled = np.interp(t_target, t_original, waveform)
-        else:
-            # Same sampling rate
-            waveform_resampled = waveform
+        # Apply aliasing resampling
+        aliased_waveform = apply_aliasing_resampling(waveform, sr, new_sr)
 
-        # Step 2: Always resample back to original sample rate to demonstrate aliasing effects
-        if len(waveform_resampled) > 0:
-            t_resampled = np.arange(len(waveform_resampled)) / new_sr
-            t_final = np.arange(len(waveform)) / sr
-            aliased_waveform = np.interp(t_final, t_resampled, waveform_resampled)
-        else:
-            aliased_waveform = waveform
-
+        # Save aliased audio
         aliased_filename = f"aliased_{new_sr}_{filename}"
         aliased_path = os.path.join(UPLOAD_FOLDER, aliased_filename)
         sf.write(aliased_path, aliased_waveform, sr)
 
+        # Analyze aliased result
         gender_after_alias = safe_predict_gender(aliased_path)
+        
+        # Compute spectrum of aliased signal
+        spectrum = compute_fft_spectrum(aliased_waveform, sr, downsample_factor=20, max_frequency=5000)
 
-        fft = np.fft.fft(aliased_waveform)
-        freqs = np.fft.fftfreq(len(fft), 1 / sr)
-        magnitude = np.abs(fft)[: len(freqs)//2]
-        freqs = freqs[: len(freqs)//2]
-
-        # Add information about the sampling scenario
+        # Determine scenario and risk
         scenario = "upsampling" if new_sr > sr else "downsampling" if new_sr < sr else "same_rate"
         aliasing_risk = "HIGH" if new_sr < 2 * nyquist_freq else "LOW"
 
@@ -128,93 +242,63 @@ async def aliasing_effect(filename: str = Form(...), new_sr: int = Form(...)):
             "aliasing_risk": aliasing_risk,
             "gender": gender_after_alias,
             "file_url": f"http://127.0.0.1:8000/uploads/{aliased_filename}",
-            "spectrum": {
-                "freqs": freqs.tolist()[::20],
-                "magnitude": magnitude.tolist()[::20]
-            }
+            "spectrum": spectrum
         }
     except Exception as e:
         print(f">>> ERROR in aliasing_effect: {e}")
         raise HTTPException(status_code=500, detail=f"Aliasing processing failed: {str(e)}")
-    
+
 # ---------------- 3. Anti-aliasing recovery ----------------
 @router.post("/recover")
 async def recover_with_dsp(filename: str = Form(...)):
+    """Apply anti-aliasing recovery using DSP techniques"""
     try:
         file_path = os.path.join(UPLOAD_FOLDER, filename)
         if not os.path.exists(file_path):
-            return {"error": "File not found!"}
+            raise HTTPException(status_code=404, detail="File not found!")
 
+        # Load aliased audio
         waveform, sr = librosa.load(file_path, sr=None, mono=True)
 
-        # Spectrum before recovery
-        fft_before = np.fft.fft(waveform)
-        freqs_before = np.fft.fftfreq(len(fft_before), 1 / sr)
-        magnitude_before = np.abs(fft_before)[: len(freqs_before)//2]
-        freqs_before = freqs_before[: len(freqs_before)//2]
+        # Compute spectrum before recovery
+        spectrum_before = compute_fft_spectrum(waveform, sr, downsample_factor=200, max_frequency=5000)
 
-        # ---------- Step 1: Oversample ----------
-        up_sr = sr * 4
-        upsampled = librosa.resample(waveform, orig_sr=sr, target_sr=up_sr)
+        # Apply anti-aliasing recovery pipeline
+        recovered_waveform = apply_anti_aliasing_recovery(waveform, sr)
 
-        # ---------- Step 2: Low-pass filter ----------
-        cutoff = sr / 3 
-        order = 6
-        b, a = butter(order, cutoff / (up_sr / 2), btype='low')
-        filtered_stage1 = filtfilt(b, a, upsampled)
-
-        # ---------- Step 3: Gaussian smoothing ----------
-        window = windows.gaussian(101, std=15)
-        window /= np.sum(window)
-        filtered_stage2 = convolve1d(filtered_stage1, window, mode='reflect')
-
-        # ---------- Step 4: Downsample ----------
-        recovered = librosa.resample(filtered_stage2, orig_sr=up_sr, target_sr=sr)
-
-        # ---------- Step 5: Normalize ----------
-        recovered = recovered / np.max(np.abs(recovered) + 1e-8)
-
-        # ---------- Step 6: Save ----------
+        # Save recovered audio
         recovered_filename = f"recovered_{filename}"
         recovered_path = os.path.join(UPLOAD_FOLDER, recovered_filename)
-        sf.write(recovered_path, recovered, sr)
+        sf.write(recovered_path, recovered_waveform, sr)
 
-        # ---------- Step 7: Predict gender ----------
+        # Analyze recovered result
         recovered_gender = safe_predict_gender(recovered_path)
 
-        # Spectrum after recovery
-        fft_after = np.fft.fft(recovered)
-        freqs_after = np.fft.fftfreq(len(fft_after), 1 / sr)
-        magnitude_after = np.abs(fft_after)[: len(freqs_after)//2]
-        freqs_after = freqs_after[: len(freqs_after)//2]
+        # Compute spectrum after recovery
+        spectrum_after = compute_fft_spectrum(recovered_waveform, sr, downsample_factor=200, max_frequency=5000)
 
         return {
             "filename": recovered_filename,
             "gender": recovered_gender,
             "original_sr": sr,
             "recovered_sr": sr,
-            "message": f"Recovered Frequency: {sr} Hz",
+            "message": f"Recovered with anti-aliasing filters",
             "file_url": f"http://127.0.0.1:8000/uploads/{recovered_filename}",
-            "spectrum_before": {
-                "freqs": freqs_before.tolist()[::200],
-                "magnitude": magnitude_before.tolist()[::200]
-            },
-            "spectrum_after": {
-                "freqs": freqs_after.tolist()[::200],
-                "magnitude": magnitude_after.tolist()[::200]
-            }
+            "spectrum_before": spectrum_before,
+            "spectrum_after": spectrum_after
         }
 
     except Exception as e:
-        print(f" DSP Recovery error: {e}")
-        return {"error": str(e)}
+        print(f">>> DSP Recovery error: {e}")
+        raise HTTPException(status_code=500, detail=f"Recovery failed: {str(e)}")
 
 # ---------------- Test endpoint ----------------
 @router.get("/test")
 async def test_endpoint():
+    """Test endpoint to verify router functionality"""
     return {
         "message": "Voice gender router is working!",
         "model_available": MODEL_AVAILABLE,
-        "model_loaded_on_demand": True,
+        "endpoints": ["/predict", "/aliasing", "/recover"],
         "timestamp": "Server is responding correctly"
     }
