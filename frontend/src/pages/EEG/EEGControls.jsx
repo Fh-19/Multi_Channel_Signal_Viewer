@@ -122,7 +122,7 @@ export default function EEGControls({
   };
 
   const resamplingType = getResamplingType();
-  const aliasingWarning = localFs < originalFs && localFs < 100;
+  const aliasingWarning = localFs < originalFs && localFs < 256;
 
   return (
     <div style={{

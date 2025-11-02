@@ -508,6 +508,7 @@ function EEGPage() {
         isLoading={isLoading || isResampling}
         experimentalFs={experimentalFs}
         isPlaying={isPlaying}
+        originalFs={originalFs}
       />
     </div>
   );

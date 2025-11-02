@@ -29,7 +29,8 @@ export default function EEGAnalysis({
   setBandPowerChannel,
   isLoading,
   experimentalFs,
-  isPlaying
+  isPlaying,
+  originalFs
 }) {
   // Compute EEG bands
   const bandData = useMemo(() => {
@@ -102,7 +103,9 @@ export default function EEGAnalysis({
     setPredictionProbs(null);
 
     try {
-      const res = await predictEegFile(uploadedFile, experimentalFs);
+      const useAliasing = experimentalFs < originalFs && experimentalFs < 256;
+
+      const res = await predictEegFile(uploadedFile, experimentalFs, null, useAliasing);
       if (res.probabilities && Object.keys(res.probabilities).length > 0) {
         setPrediction(res.prediction || "Unknown");
         setPredictionProbs(res.probabilities);
