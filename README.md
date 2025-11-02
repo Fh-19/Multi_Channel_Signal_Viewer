@@ -1,126 +1,3 @@
-# Task2 :
-# voice classification , aliasing & anti aliasing:
-This project performs voice gender recognition using a pretrained deep learning model and demonstrates aliasing and anti-aliasing recovery effects in digital audio processing.
-It consists of three main components:
-
--**Model Module (PyTorch + Hugging Face)**
--**Backend (FastAPI)**
--**Frontend (React + Chart.js)**
-## voice_gender_model.py:
-This module loads a pretrained gender recognition model from Hugging Face and predicts whether a given voice sample is Male, Female, or Unknown.
-
-Model Used:
-**alefiury/wav2vec2-large-xlsr-53-gender-recognition-librispeech**
-This model is based on Wav2Vec2, fine-tuned for gender classification.
-
-Key Functions:
-load_model()
--Loads the model and feature extractor only once to optimize performance.
--Prevents re-downloading the model multiple times.
--predict_gender_from_file(file_path: str)
--Accepts a .wav file path.
--Loads the audio using librosa (mono, 16 kHz).
--Converts the waveform to float32.
--Passes the waveform to the model via the Hugging Face feature extractor.
--Returns one of the following:
-"Male"
-"Female"
-"Unknown"
-Or an error message if prediction fails.
-
-Model Workflow:
--Audio file is read at 16 kHz mono.
--Converted into model-compatible tensors.
--Model outputs logits → highest value determines the class.
--Label is converted to readable text.
-
-## routers.backend.voice_gender.py :
-The backend handles file uploads, performs gender predictions, simulates aliasing effects, and demonstrates digital signal recovery.
-It exposes REST API endpoints for the frontend.
-
-API Endpoints:
-**1. -/predict:**
--Uploads an audio file and returns:
--File name
--Detected gender
--Sampling rate
--Duration
--Frequency spectrum (FFT)
-
-Backend actions:
--Saves uploaded file to uploads/
--Reads waveform using librosa
--Performs FFT to compute frequency magnitude
--Calls predict_gender_from_file for classification
-
-**2. /aliasing:**
--Simulates aliasing by resampling the audio at a lower sampling rate (downsampling).
-
-Parameters:
--filename: existing audio file name
--new_sr: target sampling rate
-
-Processing steps:
--Load the original file.
--Manually downsample (reduces sample rate, causing aliasing).
--Save the aliased waveform as a new file.
--Perform gender prediction again on the distorted signal.
-
-Return:
--Original and new sample rates
--Nyquist frequency
--Aliasing risk level
--Updated gender prediction
--Frequency spectrum of the aliased signal
-
-**3. /recover:**
--Applies digital signal processing (DSP) to recover the aliased signal.
-
-Processing pipeline:
--Oversample (increase sample rate by ×4).
--Apply low-pass Butterworth filter to remove high-frequency noise.
--Apply Gaussian smoothing.
--Downsample back to the original rate.
--Normalize the audio.
--Save and analyze the recovered file.
--Predict gender again.
--Return both before and after frequency spectra.
-
-**4. /test:**
-Simple test endpoint to verify the router is active.
-
-Returns:
--Server status message
--Model availability
--Timestamp
-
-## frontend.VoiceGenderPage.jsx:
-The React frontend provides an interactive interface for uploading audio files, applying aliasing, and observing recovery results with dynamic frequency spectrum plots.
-
-Main Features:
--Upload .wav file
-  Displays the original waveform and predicted gender.
--Aliasing simulation
-  Lets the user select a lower sampling rate using a slider.
-  Visualizes how frequency distortion appears.
--Audio recovery
-  Applies DSP recovery on the aliased signal.
-  Shows recovered spectrum and updated gender prediction.
--Visualization
-  Uses Chart.js (Line chart) to plot FFT spectra.
-  Displays:
-   -Original Spectrum
-   -Aliased Spectrum
-   -Recovered Spectrum
-
-Main React States:
--file: uploaded audio file
--result: original prediction response
--aliasedResult: data after aliasing
--recoveredResult: data after recovery
--freq: selected aliasing sampling rate
--loading: API request state
-
 # Multi-Channel Signal Viewer:
 ## Project Overview
 This project provides an integrated platform for handling 1D medical and non-medical signals. It performs advanced digital signal processing, offers multi-modal visualization tools, and integrates AI-driven classification models for intelligent inference and analysis.
@@ -130,6 +7,42 @@ This project provides an integrated platform for handling 1D medical and non-med
 **To run our website:**
 - Navigate to the project directory and run:
 `concurrently "uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000" "cd frontend && npm run dev"`
+
+# Human Voice Classification Module:
+This module performs voice gender recognition using a pretrained deep learning model and demonstrates aliasing and anti-aliasing recovery effects in digital audio processing.
+It consists of three main components.  
+## Backend API Endpoints:
+`POST /predict`
+- Purpose: Predict the speaker’s gender and extract signal features from an uploaded audio file.
+- Process: Saves file → loads waveform → computes duration and FFT → calls gender prediction model.
+- Output: JSON with filename, gender, sampling rate, duration, and frequency spectrum (freqs + magnitudes).  
+  
+`POST /aliasing`
+- Purpose: Simulate aliasing effect by downsampling and upsampling audio, then analyze its impact on gender prediction.
+- Process: Loads file → resamples down to new_sr → resamples back to original rate → saves aliased version → predicts gender → computes FFT.
+- Output: JSON with aliased filename, original and new SRs, gender prediction, file URL, and frequency spectrum. 
+
+`POST /recover`
+- Purpose: Perform anti-aliasing recovery using DSP techniques and compare pre/post spectra and predictions.
+- Process: Loads waveform → computes pre-recovery FFT → oversamples → low-pass filters → Gaussian smoothing → downsample → normalize → save recovered audio → predict gender → compute post-recovery FFT.
+- Output: JSON with recovered filename, gender, SR, spectra before and after recovery, and download URL.  
+
+## Gender Classification Model:
+This module loads a pretrained gender recognition model from Hugging Face and predicts whether a given voice sample is Male, Female, or Unknown.  
+Model Used:
+**alefiury/wav2vec2-large-xlsr-53-gender-recognition-librispeech**
+This model is based on Wav2Vec2, fine-tuned for gender classification.  
+## Signal Processing Pipeline:
+1. Convert to waveform (librosa.load()), ensure mono, handle sampling rate.
+2. Use np.fft.fft() to compute frequency spectrum.
+3. Examine magnitude of FFT, or pass waveform into model.  
+## Signal Visualization and Prediction Results:
+1. Aliasing the Signal causes distortion of the original signal which affects the prediction results.  
+<img width="1919" height="881" alt="Screenshot_2025-11-01_223252 1" src="https://github.com/user-attachments/assets/d8e453ee-aebf-4ade-87a5-fa4cad07d5ce" />
+
+2. Applying an anti-aliasing algorithm restores some of the signal characteristics.
+<img width="1919" height="886" alt="Screenshot_2025-11-01_223319 1" src="https://github.com/user-attachments/assets/6378d6dd-bb96-498d-bce5-069bf2122d61" />
+
 
 # ECG Signal Analysis Module:
 THE ECG Sigal Analysis Module provides advanced processing, visualization, and AI-powered interpretation of Electrocardiography (ECG) signals. This page integrates a two-stage classifier. The first classifier is a multiclass classifier identifying six cardiac abnormalities in ECG signals, the second is a finetuned binary classifier that is activated if the first classifier detected none of the six abnormalities in the ECG record. The binary classifier identifies if the ECG signal is a normal ECG or if there are other cardiac abnormalities.
