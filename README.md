@@ -1,3 +1,128 @@
+
+# Task2 :
+# voice classification , aliasing & anti aliasing:
+This project performs voice gender recognition using a pretrained deep learning model and demonstrates aliasing and anti-aliasing recovery effects in digital audio processing.
+It consists of three main components:
+
+-**Model Module (PyTorch + Hugging Face)**
+-**Backend (FastAPI)**
+-**Frontend (React + Chart.js)**
+## voice_gender_model.py:
+This module loads a pretrained gender recognition model from Hugging Face and predicts whether a given voice sample is Male, Female, or Unknown.
+ 
+Model Used:
+**alefiury/wav2vec2-large-xlsr-53-gender-recognition-librispeech**
+This model is based on Wav2Vec2, fine-tuned for gender classification.
+
+Key Functions:
+load_model()
+-Loads the model and feature extractor only once to optimize performance.
+-Prevents re-downloading the model multiple times.
+-predict_gender_from_file(file_path: str)
+-Accepts a .wav file path.
+-Loads the audio using librosa (mono, 16 kHz).
+-Converts the waveform to float32.
+-Passes the waveform to the model via the Hugging Face feature extractor.
+-Returns one of the following:
+"Male"
+"Female"
+"Unknown"
+Or an error message if prediction fails.
+
+Model Workflow:
+-Audio file is read at 16 kHz mono.
+-Converted into model-compatible tensors.
+-Model outputs logits → highest value determines the class.
+-Label is converted to readable text.
+
+## routers.backend.voice_gender.py :
+The backend handles file uploads, performs gender predictions, simulates aliasing effects, and demonstrates digital signal recovery.
+It exposes REST API endpoints for the frontend.
+
+API Endpoints:
+**1. -/predict:**
+-Uploads an audio file and returns:
+-File name
+-Detected gender
+-Sampling rate
+-Duration
+-Frequency spectrum (FFT)
+
+Backend actions:
+-Saves uploaded file to uploads/
+-Reads waveform using librosa
+-Performs FFT to compute frequency magnitude
+-Calls predict_gender_from_file for classification
+
+**2. /aliasing:**
+-Simulates aliasing by resampling the audio at a lower sampling rate (downsampling).
+
+Parameters:
+-filename: existing audio file name
+-new_sr: target sampling rate
+
+Processing steps:
+-Load the original file.
+-Manually downsample (reduces sample rate, causing aliasing).
+-Save the aliased waveform as a new file.
+-Perform gender prediction again on the distorted signal.
+
+Return:
+-Original and new sample rates
+-Nyquist frequency
+-Aliasing risk level
+-Updated gender prediction
+-Frequency spectrum of the aliased signal
+
+**3. /recover:**
+-Applies digital signal processing (DSP) to recover the aliased signal.
+
+Processing pipeline:
+-Oversample (increase sample rate by ×4).
+-Apply low-pass Butterworth filter to remove high-frequency noise.
+-Apply Gaussian smoothing.
+-Downsample back to the original rate.
+-Normalize the audio.
+-Save and analyze the recovered file.
+-Predict gender again.
+-Return both before and after frequency spectra.
+
+**4. /test:**
+Simple test endpoint to verify the router is active.
+
+Returns:
+-Server status message
+-Model availability
+-Timestamp
+
+## frontend.VoiceGenderPage.jsx:
+The React frontend provides an interactive interface for uploading audio files, applying aliasing, and observing recovery results with dynamic frequency spectrum plots.
+
+Main Features:
+-Upload .wav file
+  Displays the original waveform and predicted gender.
+-Aliasing simulation
+  Lets the user select a lower sampling rate using a slider.
+  Visualizes how frequency distortion appears.
+-Audio recovery
+  Applies DSP recovery on the aliased signal.
+  Shows recovered spectrum and updated gender prediction.
+-Visualization
+  Uses Chart.js (Line chart) to plot FFT spectra.
+  Displays:
+   -Original Spectrum
+   -Aliased Spectrum
+   -Recovered Spectrum
+
+Main React States:
+-file: uploaded audio file
+-result: original prediction response
+-aliasedResult: data after aliasing
+-recoveredResult: data after recovery
+-freq: selected aliasing sampling rate
+-loading: API request state
+
+
 # Multi-Channel Signal Viewer:
 ## Project Overview
 This project provides an integrated platform for handling 1D medical and non-medical signals. It performs advanced digital signal processing, offers multi-modal visualization tools, and integrates AI-driven classification models for intelligent inference and analysis.
